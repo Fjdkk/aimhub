@@ -20,6 +20,11 @@ public final class ContainerAccess {
     }
 
     public func gameContainerPath(bundleID: String) throws -> String {
+        // Ưu tiên dataContainerURL từ LSApplicationProxy (giống app tham chiếu
+        // CheatiOS DSW). Chỉ fallback sang MCM nếu không lấy được.
+        if let path = AppLauncher.containerPath(bundleID: bundleID), !path.isEmpty {
+            return path
+        }
         guard let mcm = mcm else { throw MCMError.dlopenFailed }
         return try mcm.containerPath(forBundleID: bundleID, cls: .data, part: 0)
     }
