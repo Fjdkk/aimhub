@@ -121,7 +121,7 @@ enum POSIXFile {
 
         var data = Data(count: Int(st.st_size))
         let n = data.withUnsafeMutableBytes { (buf: UnsafeMutableRawBufferPointer) -> Int in
-            read(fd, buf.baseAddress, buf.count)
+            Darwin.read(fd, buf.baseAddress, buf.count)
         }
         guard n == data.count else { throw POSIXFileError.io("đọc \(path) không đầy đủ") }
         return data
@@ -139,7 +139,7 @@ enum POSIXFile {
         data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) in
             guard let base = buf.baseAddress else { return }
             while written < buf.count {
-                let n = write(fd, base.advanced(by: written), buf.count - written)
+                let n = Darwin.write(fd, base.advanced(by: written), buf.count - written)
                 if n <= 0 { break }
                 written += n
             }
