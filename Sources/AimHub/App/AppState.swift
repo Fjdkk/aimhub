@@ -1,0 +1,241 @@
+import Foundation
+import SwiftUI
+
+@MainActor
+final class AppState: ObservableObject {
+    @Published var activeKey: KeyInfo?
+    @Published var activeGame: Game?
+    @Published var activeModID: String?
+    @Published var forceUpdate: Bool = false
+    @Published var isConnected = false
+    @Published var announcements: [Announcement] = []
+    @Published var versionInfo: VersionInfo?
+    @Published var sessionLog: [LogEntry] = []
+    @Published var language: Language = .vietnamese
+    @Published var games: [Game] = []
+    @Published var notificationsEnabled: Bool {
+        didSet { UserDefaults.standard.set(notificationsEnabled, forKey: notificationsKey) }
+    }
+
+    private let server = ServerClient.shared
+    private var started = false
+    private let activeModKey = "aimhub.activeModID"
+    private let lastActiveKey = "aimhub.session.lastActiveAt"
+    private let notificationsKey = "aimhub.notificationsEnabled"
+    private var heartbeatTask: Task<Void, Never>?
+
+    init() {
+        notificationsEnabled = UserDefaults.standard.bool(forKey: notificationsKey)
+    }
+
+    func start() {
+        guard !started else { return }
+        started = true
+        activeKey = KeyStorage.load()
+        activeModID = UserDefaults.standard.string(forKey: activeModKey)
+        checkVersion()
+        if activeModID != nil {
+            log("Khôi phục trạng thái: mod đang bật")
+        }
+        if activeKey != nil {
+            checkBackgroundGap()
+            startHeartbeat()
+        }
+    }
+
+    func activateKey(_ key: String) async throws {
+        let deviceID = DeviceInfo.identifier
+        let info = try await server.activateKey(key: key, deviceID: deviceID)
+        activeKey = info
+        KeyStorage.save(info)
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastActiveKey)
+        log("Kích hoạt key thành công")
+    }
+
+    func clearKey() {
+        activeKey = nil
+        KeyStorage.clear()
+        UserDefaults.standard.removeObject(forKey: lastActiveKey)
+        stopHeartbeat()
+    }
+
+    func checkVersion() {
+        Task {
+            do {
+                versionInfo = try await server.fetchVersion()
+                let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+                if let minV = versionInfo?.minVersion,
+                   compareVersions(current, minV) < 0 {
+                    forceUpdate = true
+                }
+                if activeKey != nil {
+                    checkBackgroundGap()
+                }
+            } catch {
+                log("Kiểm tra phiên bản thất bại")
+            }
+        }
+    }
+
+    func loadGames() async {
+        do {
+            games = try await server.fetchGames()
+            isConnected = true
+            log("Kết nối máy chủ thành công")
+            if let saved = UserDefaults.standard.string(forKey: "activeBundleID") {
+                activeGame = games.first(where: { $0.bundleID == saved })
+            }
+        } catch {
+            isConnected = false
+            log("Lỗi kết nối máy chủ")
+        }
+    }
+
+    func selectGame(_ game: Game?) {
+        if game?.bundleID != activeGame?.bundleID, activeModID != nil {
+            try? ModManager.shared.restoreAll(bundleID: activeGame?.bundleID ?? "")
+            setActiveMod(nil)
+            log("Đã khôi phục file gốc khi đổi game")
+        }
+        activeGame = game
+        if let g = game {
+            UserDefaults.standard.set(g.bundleID, forKey: "activeBundleID")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "activeBundleID")
+        }
+    }
+
+    func installMod(_ mod: ModEntry) async throws {
+        guard let game = activeGame else { throw ModManagerError.containerUnavailable }
+        if activeModID != nil, activeModID != mod.id {
+            try ModManager.shared.restoreAll(bundleID: game.bundleID)
+        }
+        try ModManager.shared.installMod(mod, bundleID: game.bundleID)
+        setActiveMod(mod.id)
+        log("Đã bật \(mod.displayName)")
+    }
+
+    func restoreAll() async throws {
+        guard let game = activeGame else { throw ModManagerError.containerUnavailable }
+        try ModManager.shared.restoreAll(bundleID: game.bundleID)
+        setActiveMod(nil)
+        log("Đã khôi phục file gốc")
+    }
+
+    private func setActiveMod(_ id: String?) {
+        activeModID = id
+        if let id = id {
+            UserDefaults.standard.set(id, forKey: activeModKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: activeModKey)
+        }
+    }
+
+    func openGame() {
+        guard let game = activeGame else { return }
+        let ok = AppLauncher.openGame(bundleID: game.bundleID)
+        log(ok ? "Đã mở game \(game.name)" : "Không mở được game \(game.name)")
+    }
+
+    func isGameInstalled(_ game: Game) -> Bool {
+        AppLauncher.isGameInstalled(bundleID: game.bundleID)
+    }
+
+    // MARK: - Session (auto logout khi rời app quá lâu)
+
+    private func sessionDurationMinutes() -> Int {
+        versionInfo?.sessionDuration ?? 60
+    }
+
+    /// Gọi khi app vào lại foreground / khởi động. Đếm thời gian rời app,
+    /// không đếm thời gian user đang ở trong app.
+    func sceneDidBecomeActive() {
+        guard activeKey != nil else { return }
+        checkBackgroundGap()
+        startHeartbeat()
+    }
+
+    func sceneDidEnterBackground() {
+        stopHeartbeat()
+    }
+
+    private func startHeartbeat() {
+        guard heartbeatTask == nil else { return }
+        heartbeatTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                self?.touchLastActive()
+            }
+        }
+    }
+
+    private func stopHeartbeat() {
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+    }
+
+    private func touchLastActive() {
+        guard activeKey != nil else { return }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastActiveKey)
+    }
+
+    private func checkBackgroundGap() {
+        let last = UserDefaults.standard.double(forKey: lastActiveKey)
+        guard last > 0 else {
+            touchLastActive()
+            return
+        }
+        let gone = Date().timeIntervalSince1970 - last
+        if gone >= Double(sessionDurationMinutes()) * 60 {
+            expireSession()
+        }
+    }
+
+    private func expireSession() {
+        log("Phiên hoạt động đã hết hạn")
+        let bundleID = activeGame?.bundleID
+            ?? UserDefaults.standard.string(forKey: "activeBundleID")
+        if let bundleID = bundleID, activeModID != nil {
+            try? ModManager.shared.restoreAll(bundleID: bundleID)
+            setActiveMod(nil)
+            log("Đã khôi phục file gốc khi hết phiên")
+        }
+        activeGame = nil
+        activeKey = nil
+        KeyStorage.clear()
+        UserDefaults.standard.removeObject(forKey: lastActiveKey)
+        stopHeartbeat()
+    }
+
+    func log(_ message: String) {
+        let entry = LogEntry(time: Date(), message: message)
+        sessionLog.insert(entry, at: 0)
+        if sessionLog.count > 200 {
+            sessionLog.removeLast(sessionLog.count - 200)
+        }
+    }
+
+    func clearLog() {
+        sessionLog.removeAll()
+    }
+
+    func loadAnnouncements() async {
+        do {
+            announcements = try await server.fetchAnnouncements()
+        } catch {
+            log("Không tải được thông báo")
+        }
+    }
+}
+
+func compareVersions(_ a: String, _ b: String) -> Int {
+    let av = a.split(separator: ".").compactMap { Int($0) }
+    let bv = b.split(separator: ".").compactMap { Int($0) }
+    let count = max(av.count, bv.count)
+    for i in 0..<count {
+        let x = i < av.count ? av[i] : 0
+        let y = i < bv.count ? bv[i] : 0
+        if x != y { return x < y ? -1 : 1 }
+    }
+    return 0
+}
