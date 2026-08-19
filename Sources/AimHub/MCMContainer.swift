@@ -22,6 +22,8 @@ public enum MCMError: Error, CustomStringConvertible {
             return "Kích hoạt sandbox extension thất bại (errno=\(e))"
         }
     }
+
+    public var errorDescription: String? { description }
 }
 
 public enum MCMContainerClass: UInt32 {

@@ -31,6 +31,11 @@ final class AppState: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
+        ContainerAccess.onDiagnostic = { [weak self] message in
+            Task { @MainActor in
+                self?.log(message)
+            }
+        }
         activeKey = KeyStorage.load()
         activeModID = UserDefaults.standard.string(forKey: activeModKey)
         checkVersion()
@@ -113,6 +118,13 @@ final class AppState: ObservableObject {
         try ModManager.shared.installMod(mod, bundleID: game.bundleID)
         setActiveMod(mod.id)
         log("Đã bật \(mod.displayName)")
+    }
+
+    func diagnoseContainer(for game: Game) {
+        log("=== Chẩn đoán container \(game.bundleID) ===")
+        for line in ContainerAccess.shared.diagnose(bundleID: game.bundleID) {
+            log(line)
+        }
     }
 
     func restoreAll() async throws {

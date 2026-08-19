@@ -58,6 +58,15 @@ struct SettingsView: View {
                 settingsRow("globe", title: "Ngôn ngữ", action: { route = .lang })
                 settingsRow("info.circle", title: "Thông tin ứng dụng", action: { route = .about })
 
+                if appState.activeGame != nil {
+                    settingsRow("stethoscope", title: "Chẩn đoán container game", action: {
+                        if let game = appState.activeGame {
+                            appState.diagnoseContainer(for: game)
+                            route = .log
+                        }
+                    })
+                }
+
                 Button {
                     if let url = URL(string: "https://zalo.me/0336898934") {
                         UIApplication.shared.open(url)
