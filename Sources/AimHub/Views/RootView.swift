@@ -22,8 +22,10 @@ struct RootView: View {
         }
         .onAppear {
             appState.start()
-            appState.loadGames()
-            appState.loadAnnouncements()
+            Task {
+                await appState.loadGames()
+                await appState.loadAnnouncements()
+            }
         }
     }
 
