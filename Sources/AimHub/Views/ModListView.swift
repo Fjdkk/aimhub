@@ -147,9 +147,11 @@ struct ModListView: View {
             }
             .padding(.trailing, 4)
 
-            Image(systemName: game.bundleID == GameBundleID.freeFireMax ? "flame.fill" : "flame")
-                .font(.system(size: 34))
-                .foregroundStyle(Theme.gradient())
+            Image(gameLogoName(game.bundleID))
+                .resizable()
+                .scaledToFit()
+                .frame(width: 38, height: 38)
+                .clipShape(RoundedRectangle(cornerRadius: 9))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("AimHub Mods")
@@ -324,5 +326,13 @@ struct ModListView: View {
                         displayName: rule.name,
                         description: "",
                         files: [file])
+    }
+
+    private func gameLogoName(_ bundleID: String) -> String {
+        switch bundleID {
+        case GameBundleID.freeFireMax: return "GameFFMax"
+        case GameBundleID.freeFire: return "GameFF"
+        default: return "Logo"
+        }
     }
 }

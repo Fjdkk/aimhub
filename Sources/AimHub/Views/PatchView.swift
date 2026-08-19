@@ -71,9 +71,11 @@ struct PatchView: View {
             showMods = true
         } label: {
             HStack(spacing: 14) {
-                Image(systemName: game.bundleID == GameBundleID.freeFireMax ? "flame.fill" : "flame")
-                    .font(.system(size: 34))
-                    .foregroundStyle(Theme.gradient())
+                Image(gameLogoName(game.bundleID))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 Text(game.name)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(Theme.text)
@@ -85,5 +87,13 @@ struct PatchView: View {
             .card(padding: 16)
         }
         .padding(.bottom, 10)
+    }
+
+    private func gameLogoName(_ bundleID: String) -> String {
+        switch bundleID {
+        case GameBundleID.freeFireMax: return "GameFFMax"
+        case GameBundleID.freeFire: return "GameFF"
+        default: return "Logo"
+        }
     }
 }

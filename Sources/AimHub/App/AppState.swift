@@ -138,7 +138,16 @@ final class AppState: ObservableObject {
     }
 
     func isGameInstalled(_ game: Game) -> Bool {
-        AppLauncher.isGameInstalled(bundleID: game.bundleID)
+        if AppLauncher.isGameInstalled(bundleID: game.bundleID) {
+            return true
+        }
+        do {
+            let path = try ContainerAccess.shared.gameContainerPath(bundleID: game.bundleID)
+            var isDir: ObjCBool = false
+            return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
+        } catch {
+            return false
+        }
     }
 
     // MARK: - Session (auto logout khi rời app quá lâu)

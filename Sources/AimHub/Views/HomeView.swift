@@ -51,10 +51,11 @@ struct HomeView: View {
     private var topBar: some View {
         HStack {
             HStack(spacing: 8) {
-                Image(systemName: "target")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(Theme.gradient())
-                    .shadow(color: Theme.accent.opacity(0.5), radius: 8)
+                Image("Logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 30, height: 30)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
                 Text("AimHub")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(Theme.text)
@@ -116,9 +117,11 @@ struct HomeView: View {
             appState.openGame()
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: gameIcon)
-                    .font(.system(size: 36))
-                    .foregroundStyle(Theme.gradient())
+                Image(gameIconName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(appState.activeGame?.name ?? "Chưa chọn game")
                         .font(.system(size: 16, weight: .bold))
@@ -136,8 +139,12 @@ struct HomeView: View {
         }
     }
 
-    private var gameIcon: String {
-        appState.activeGame?.bundleID == GameBundleID.freeFireMax ? "flame.fill" : "flame"
+    private var gameIconName: String {
+        switch appState.activeGame?.bundleID {
+        case GameBundleID.freeFireMax: return "GameFFMax"
+        case GameBundleID.freeFire: return "GameFF"
+        default: return "Logo"
+        }
     }
 
     private var noticeBanner: some View {
