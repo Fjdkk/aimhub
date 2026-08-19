@@ -254,8 +254,7 @@ struct ModListView: View {
         guard let game = appState.activeGame else { return }
         busyModID = rule.ruleID
         errorText = nil
-
-        if appState.activeModID == rule.ruleID {
+if appState.activeModID == rule.ruleID {
             Task {
                 do {
                     try await appState.restoreAll()
@@ -269,11 +268,7 @@ struct ModListView: View {
             return
         }
 
-        guard appState.isGameInstalled(game) else {
-            busyModID = nil
-            errorText = "Chưa cài game \(game.name). Hãy cài game trước khi bật mod."
-            return
-        }        Task {
+        Task {
             do {
                 let modEntry = try await buildModEntry(rule, game: game)
                 try await appState.installMod(modEntry)
@@ -286,7 +281,6 @@ struct ModListView: View {
             }
         }
     }
-
     private func resetAll() {
         guard busyModID == nil else { return }
         busyModID = "reset"
