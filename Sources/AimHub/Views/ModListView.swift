@@ -198,7 +198,7 @@ struct ModListView: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(isOn ? Theme.gradient() : Color(red: 0.165, green: 0.2, blue: 0.271))
+                    .fill(isOn ? AnyShapeStyle(Theme.gradient()) : AnyShapeStyle(Color(red: 0.165, green: 0.2, blue: 0.271)))
                     .frame(width: 50, height: 28)
                     .shadow(color: isOn ? Theme.accent.opacity(0.6) : .clear, radius: 8)
                 Circle()

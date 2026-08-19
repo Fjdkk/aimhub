@@ -100,7 +100,7 @@ struct KeyView: View {
             do {
                 try await appState.activateKey(value)
                 loading = false
-                appState.loadGames()
+                await appState.loadGames()
             } catch {
                 loading = false
                 errorText = error.localizedDescription

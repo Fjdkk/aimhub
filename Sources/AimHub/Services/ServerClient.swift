@@ -55,8 +55,6 @@ public struct ProjectDetail: Codable, Identifiable, Hashable {
     public let game: String
     public let bundleID: String
     public let rules: [RuleDetail]
-
-    public var id: String { name }
 }
 
 public struct RuleDetail: Codable, Identifiable, Hashable {
