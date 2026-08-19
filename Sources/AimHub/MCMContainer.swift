@@ -36,9 +36,9 @@ public enum MCMContainerClass: UInt32 {
 }
 
 public final class MCMContainer {
-    public typealias Query = UnsafeMutableRawPointer
-    public typealias Object = UnsafeMutableRawPointer
-    public typealias ErrorRef = UnsafeMutableRawPointer?
+    public typealias Query = OpaquePointer
+    public typealias Object = OpaquePointer
+    public typealias ErrorRef = OpaquePointer
 
     public static let shared: MCMContainer? = {
         try? MCMContainer()
