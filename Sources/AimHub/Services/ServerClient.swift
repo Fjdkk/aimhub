@@ -1,12 +1,12 @@
 import Foundation
 
-public enum ServerError: Error, CustomStringConvertible {
+public enum ServerError: Error, LocalizedError {
     case invalidURL
     case http(Int)
     case decoding(String)
     case message(String)
 
-    public var description: String {
+    public var errorDescription: String? {
         switch self {
         case .invalidURL: return "URL không hợp lệ"
         case .http(let c): return "Lỗi server (\(c))"

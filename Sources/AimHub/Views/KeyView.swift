@@ -10,9 +10,11 @@ struct KeyView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            Image(systemName: "target")
-                .font(.system(size: 60, weight: .semibold))
-                .foregroundStyle(Theme.gradient())
+            Image("Logo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 88, height: 88)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
                 .padding(.bottom, 20)
 
             Text("NHẬP KEY KÍCH HOẠT")

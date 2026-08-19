@@ -359,9 +359,11 @@ struct AboutView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         VStack(spacing: 4) {
-                            Image(systemName: "target")
-                                .font(.system(size: 40, weight: .semibold))
-                                .foregroundStyle(Theme.gradient())
+                            Image("Logo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 60, height: 60)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
                                 .padding(.bottom, 8)
                             Text("AimHub")
                                 .font(.system(size: 17, weight: .heavy))

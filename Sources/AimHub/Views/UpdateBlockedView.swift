@@ -7,9 +7,11 @@ struct UpdateBlockedView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            Image(systemName: "target")
-                .font(.system(size: 60, weight: .semibold))
-                .foregroundStyle(Theme.gradient())
+            Image("Logo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 80, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 18))
                 .padding(.bottom, 18)
 
             Text("BẢN CẬP NHẬT MỚI ĐÃ CÓ")
