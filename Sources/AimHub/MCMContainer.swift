@@ -58,6 +58,7 @@ public final class MCMContainer {
         let setGroupIdentifiers: @convention(c) (Query?, CFArray) -> Void
         let setFlags: @convention(c) (Query?, UInt64) -> Void
         let setPart: @convention(c) (Query?, UInt64) -> Void
+        let setPartDomain: @convention(c) (Query?, UInt64) -> Void
         let getSingleResult: @convention(c) (Query?, UnsafeMutablePointer<ErrorRef?>) -> Object?
         let getLastError: @convention(c) (Query?) -> ErrorRef?
         let iterateResultsSync: @convention(c) (Query?, UnsafeMutablePointer<ErrorRef?>) -> Object?
@@ -68,6 +69,8 @@ public final class MCMContainer {
         let copySandboxToken: @convention(c) (Object?) -> UnsafeMutablePointer<CChar>?
         let sandboxExtensionActivate: @convention(c) (Object?, UnsafeMutablePointer<ErrorRef?>) -> Int32
         let objectFree: @convention(c) (Object?) -> Void
+        let sandboxExtensionConsume: @convention(c) (UnsafePointer<CChar>?) -> Int32
+        let sandboxExtensionRelease: @convention(c) (Int32) -> Int32
         let errorGetPosixErrno: @convention(c) (ErrorRef?) -> Int32
         let errorGetMessage: @convention(c) (ErrorRef?) -> UnsafeMutablePointer<CChar>?
     }
@@ -90,6 +93,7 @@ public final class MCMContainer {
             setGroupIdentifiers: try sym("container_query_set_group_identifiers"),
             setFlags: try sym("container_query_operation_set_flags"),
             setPart: try sym("container_query_operation_set_part"),
+            setPartDomain: try sym("container_query_operation_set_part_domain"),
             getSingleResult: try sym("container_query_get_single_result"),
             getLastError: try sym("container_query_get_last_error"),
             iterateResultsSync: try sym("container_query_iterate_results_sync"),
@@ -100,6 +104,8 @@ public final class MCMContainer {
             copySandboxToken: try sym("container_copy_sandbox_token"),
             sandboxExtensionActivate: try sym("container_object_sandbox_extension_activate"),
             objectFree: try sym("container_object_free"),
+            sandboxExtensionConsume: try sym("sandbox_extension_consume"),
+            sandboxExtensionRelease: try sym("sandbox_extension_release"),
             errorGetPosixErrno: try sym("container_error_get_posix_errno"),
             errorGetMessage: try sym("container_error_get_message")
         )
@@ -140,10 +146,18 @@ public final class MCMContainer {
             ids = arr as CFArray
         }
         fns.setIdentifiers(query, ids)
+        fns.setFlags(query, 0)
         fns.setPart(query, part)
+        fns.setPartDomain(query, 0)
 
         var err: ErrorRef? = nil
-        guard let obj = fns.getSingleResult(query, &err) else {
+        var obj = fns.getSingleResult(query, &err)
+
+        // Fallback: iterate_results_sync giống app tham chiếu
+        if obj == nil {
+            obj = fns.iterateResultsSync(query, &err)
+        }
+        guard let obj = obj else {
             throw MCMError.queryFailed(errorText(err ?? fns.getLastError(query)))
         }
         defer { fns.objectFree(obj) }
@@ -155,10 +169,17 @@ public final class MCMContainer {
         free(pathPtr)
 
         if activateExtension {
-            var actErr: ErrorRef? = nil
-            let rc = fns.sandboxExtensionActivate(obj, &actErr)
-            if rc != 0 {
-                throw MCMError.activationFailed(fns.errorGetPosixErrno(actErr))
+            // Kích hoạt sandbox extension để có quyền ghi vào container
+            if let tokenPtr = fns.copySandboxToken(obj) {
+                let token = String(cString: tokenPtr)
+                free(tokenPtr)
+                fns.sandboxExtensionConsume(token)
+            } else {
+                var actErr: ErrorRef? = nil
+                let rc = fns.sandboxExtensionActivate(obj, &actErr)
+                if rc != 0 {
+                    throw MCMError.activationFailed(fns.errorGetPosixErrno(actErr))
+                }
             }
         }
 
@@ -174,7 +195,9 @@ public final class MCMContainer {
         fns.setClass(query, UInt64(MCMContainerClass.data.rawValue))
         let arr = [bundleID] as NSArray
         fns.setIdentifiers(query, arr as CFArray)
+        fns.setFlags(query, 0)
         fns.setPart(query, 0)
+        fns.setPartDomain(query, 0)
 
         var err: ErrorRef? = nil
         guard let obj = fns.getSingleResult(query, &err) else {
