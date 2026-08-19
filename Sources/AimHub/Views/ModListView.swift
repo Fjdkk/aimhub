@@ -273,9 +273,7 @@ struct ModListView: View {
             busyModID = nil
             errorText = "Chưa cài game \(game.name). Hãy cài game trước khi bật mod."
             return
-        }
-
-        Task {
+        }        Task {
             do {
                 let modEntry = try await buildModEntry(rule, game: game)
                 try await appState.installMod(modEntry)

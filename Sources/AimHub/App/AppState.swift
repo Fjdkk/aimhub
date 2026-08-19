@@ -146,6 +146,8 @@ final class AppState: ObservableObject {
             var isDir: ObjCBool = false
             return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
         } catch {
+            log("Check game \(game.bundleID) thất bại: \(error.localizedDescription)")
+            log("App phát hiện: \(AppLauncher.debugGameApps().joined(separator: ", "))")
             return false
         }
     }
