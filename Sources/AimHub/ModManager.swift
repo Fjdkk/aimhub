@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public struct ModFile {
     public let name: String
@@ -43,10 +44,115 @@ public enum ModManagerError: Error, CustomStringConvertible {
     }
 }
 
+/// Thao tác file bằng POSIX trực tiếp (open/write/rename/unlink/mkdir).
+/// Foundation/FileManager tự kiểm tra sandbox theo bundle ID hiện tại và
+/// có thể chặn truy cập container của app khác dù sandbox extension đã được
+/// consume. POSIX nói chuyện thẳng với kernel, chỉ kiểm tra extension đã consume.
+enum POSIXFileError: Error, CustomStringConvertible {
+    case io(String)
+    var description: String {
+        switch self {
+        case .io(let m): return m
+        }
+    }
+}
+
+enum POSIXFile {
+    private static func errnoMessage() -> String {
+        if let p = strerror(errno) {
+            return String(cString: p)
+        }
+        return "errno=\(errno)"
+    }
+
+    static func exists(_ path: String) -> Bool {
+        var st = stat()
+        return stat(path, &st) == 0
+    }
+
+    static func isDirectory(_ path: String) -> Bool {
+        var st = stat()
+        guard stat(path, &st) == 0 else { return false }
+        return (st.st_mode & S_IFMT) == S_IFDIR
+    }
+
+    static func createDirectory(atPath path: String, withIntermediateDirectories intermediate: Bool) throws {
+        if isDirectory(path) { return }
+        if exists(path) {
+            throw POSIXFileError.io("Đã tồn tại nhưng không phải thư mục: \(path)")
+        }
+        if intermediate {
+            let parent = (path as NSString).deletingLastPathComponent
+            if parent != path && !parent.isEmpty && !exists(parent) {
+                try createDirectory(atPath: parent, withIntermediateDirectories: true)
+            }
+        }
+        if mkdir(path, S_IRWXU | S_IRWXG | S_IRWXO) != 0 {
+            if !isDirectory(path) {
+                throw POSIXFileError.io("mkdir \(path) thất bại: \(errnoMessage())")
+            }
+        }
+    }
+
+    static func copy(from src: String, to dst: String) throws {
+        let data = try read(from: src)
+        try write(data: data, to: dst)
+    }
+
+    static func move(from src: String, to dst: String) throws {
+        if rename(src, dst) != 0 {
+            throw POSIXFileError.io("rename \(src) -> \(dst) thất bại: \(errnoMessage())")
+        }
+    }
+
+    static func remove(_ path: String) throws {
+        if unlink(path) != 0 {
+            throw POSIXFileError.io("unlink \(path) thất bại: \(errnoMessage())")
+        }
+    }
+
+    static func read(from path: String) throws -> Data {
+        let fd = open(path, O_RDONLY)
+        guard fd >= 0 else { throw POSIXFileError.io("open \(path) thất bại: \(errnoMessage())") }
+        defer { close(fd) }
+
+        var st = stat()
+        guard fstat(fd, &st) == 0 else { throw POSIXFileError.io("fstat \(path) thất bại: \(errnoMessage())") }
+
+        var data = Data(count: Int(st.st_size))
+        let n = data.withUnsafeMutableBytes { (buf: UnsafeMutableRawBufferPointer) -> Int in
+            read(fd, buf.baseAddress, buf.count)
+        }
+        guard n == data.count else { throw POSIXFileError.io("đọc \(path) không đầy đủ") }
+        return data
+    }
+
+    static func write(data: Data, to path: String) throws {
+        let dir = (path as NSString).deletingLastPathComponent
+        try createDirectory(atPath: dir, withIntermediateDirectories: true)
+
+        let fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR)
+        guard fd >= 0 else { throw POSIXFileError.io("open \(path) thất bại: \(errnoMessage())") }
+        defer { close(fd) }
+
+        var written = 0
+        data.withUnsafeBytes { (buf: UnsafeRawBufferPointer) in
+            guard let base = buf.baseAddress else { return }
+            while written < buf.count {
+                let n = write(fd, base.advanced(by: written), buf.count - written)
+                if n <= 0 { break }
+                written += n
+            }
+        }
+        guard written == data.count else {
+            throw POSIXFileError.io("ghi \(path) không đầy đủ (\(written)/\(data.count))")
+        }
+    }
+}
+
 public final class ModManager {
     public static let shared = ModManager()
 
-    private let fm = FileManager.default
     private let backupExtension = ".bak"
     private let registryKey = "aimhub.backup.registry"
 
@@ -54,8 +160,7 @@ public final class ModManager {
 
     public func prepareContainer(bundleID: String) throws -> String {
         let path = try ContainerAccess.shared.gameContainerPath(bundleID: bundleID)
-        var isDir: ObjCBool = false
-        guard fm.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
+        guard POSIXFile.isDirectory(path) else {
             throw ModManagerError.containerUnavailable
         }
         containerRoot = path
@@ -78,17 +183,19 @@ public final class ModManager {
 
     public func hasBackup(relativePath: String) -> Bool {
         guard let abs = try? absolute(relativePath) else { return false }
-        return fm.fileExists(atPath: abs + backupExtension)
+        return POSIXFile.exists(abs + backupExtension)
     }
 
     public func backupFile(relativePath: String) throws {
         let abs = try absolute(relativePath)
-        guard fm.fileExists(atPath: abs) else { throw ModManagerError.ioFailed("Không tồn tại: \(relativePath)") }
+        guard POSIXFile.exists(abs) else {
+            throw ModManagerError.ioFailed("Không tồn tại: \(relativePath)")
+        }
 
         let backupPath = abs + backupExtension
-        if !fm.fileExists(atPath: backupPath) {
+        if !POSIXFile.exists(backupPath) {
             do {
-                try fm.copyItem(atPath: abs, toPath: backupPath)
+                try POSIXFile.copy(from: abs, to: backupPath)
             } catch {
                 throw ModManagerError.ioFailed(error.localizedDescription)
             }
@@ -113,10 +220,10 @@ public final class ModManager {
         for file in mod.files {
             let abs = try absolute(file.relativePath)
             let backupPath = abs + backupExtension
-            guard fm.fileExists(atPath: backupPath) else { throw ModManagerError.noBackup }
+            guard POSIXFile.exists(backupPath) else { throw ModManagerError.noBackup }
             do {
-                try fm.removeItem(atPath: abs)
-                try fm.moveItem(atPath: backupPath, toPath: abs)
+                try POSIXFile.remove(abs)
+                try POSIXFile.move(from: backupPath, to: abs)
             } catch {
                 throw ModManagerError.ioFailed(error.localizedDescription)
             }
@@ -129,10 +236,10 @@ public final class ModManager {
         var restored = 0
         for backupPath in list {
             let origPath = String(backupPath.dropLast(backupExtension.count))
-            guard fm.fileExists(atPath: backupPath) else { continue }
+            guard POSIXFile.exists(backupPath) else { continue }
             do {
-                try fm.removeItem(atPath: origPath)
-                try fm.moveItem(atPath: backupPath, toPath: origPath)
+                try POSIXFile.remove(origPath)
+                try POSIXFile.move(from: backupPath, to: origPath)
                 restored += 1
             } catch {
                 throw ModManagerError.ioFailed(error.localizedDescription)
@@ -143,16 +250,8 @@ public final class ModManager {
     }
 
     private func writeFile(data: Data, to path: String) throws {
-        let dir = (path as NSString).deletingLastPathComponent
-        if !fm.fileExists(atPath: dir) {
-            do {
-                try fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
-            } catch {
-                throw ModManagerError.ioFailed(error.localizedDescription)
-            }
-        }
         do {
-            try data.write(to: URL(fileURLWithPath: path), options: .atomic)
+            try POSIXFile.write(data: data, to: path)
         } catch {
             throw ModManagerError.ioFailed(error.localizedDescription)
         }
