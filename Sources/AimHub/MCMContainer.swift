@@ -139,7 +139,7 @@ public final class MCMContainer {
     /// mcm_bridge.m): objectCopy → copySandboxToken (kiểm tra token rỗng) →
     /// free(token) → objectActivate(copy, false) → objectFree(copy).
     /// Object gốc thuộc query — KHÔNG được free ở đây.
-    private func activateExtension(on object: Object) throws {
+    private func activateSandboxExtension(on object: Object) throws {
         guard let fns = fns else { throw MCMError.dlopenFailed }
         guard let copy = fns.objectCopy(object) else {
             throw MCMError.objectFailed("copy")
@@ -199,7 +199,7 @@ public final class MCMContainer {
         let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            try activateExtension(on: obj)
+            try activateSandboxExtension(on: obj)
         }
 
         return path
@@ -240,7 +240,7 @@ public final class MCMContainer {
                 guard let p = fns.objectGetPath(candidate) else { return true }
                 iteratedPath = normalizePath(String(cString: p))
                 if activateExtension {
-                    try? activateExtension(on: candidate)
+                    try? activateSandboxExtension(on: candidate)
                 }
                 return true
             }
@@ -259,7 +259,7 @@ public final class MCMContainer {
         let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            try activateExtension(on: obj)
+            try activateSandboxExtension(on: obj)
         }
 
         return path
@@ -320,7 +320,7 @@ public final class MCMContainer {
                 return String(cString: p)
             }()
             if ident == bundleID, let path = path {
-                try? activateExtension(on: current)
+                try? activateSandboxExtension(on: current)
                 foundPath = normalizePath(path)
                 return false
             }
