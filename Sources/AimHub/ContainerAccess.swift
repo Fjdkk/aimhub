@@ -118,7 +118,9 @@ public final class ContainerAccess {
     private func scanContainerPath(bundleID: String) -> String? {
         let root = "/var/mobile/Containers/Data/Application"
         guard let dir = opendir(root) else {
-            Self.diag("opendir \(root) thất bại errno=\(errno) (\(strerror(errno) ?? ""))")
+            let err = errno
+            let msg = (strerror(err) != nil) ? String(cString: strerror(err)!) : "errno=\(err)"
+            Self.diag("opendir \(root) thất bại errno=\(err) (\(msg))")
             return nil
         }
         defer { closedir(dir) }
