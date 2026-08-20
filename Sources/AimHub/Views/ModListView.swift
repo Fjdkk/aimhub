@@ -269,7 +269,6 @@ if appState.activeModID == rule.ruleID {
                 try await appState.installMod(modEntry)
                 busyModID = nil
                 showToast(String(format: L10n.t("mod.on"), rule.name))
-                appState.openGame()
             } catch {
                 busyModID = nil
                 errorText = error.localizedDescription

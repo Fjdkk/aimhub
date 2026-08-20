@@ -1,33 +1,37 @@
 import Foundation
+import Security
 import UIKit
 
-public enum KeyStorage {
-    private static let defaults = UserDefaults.standard
-    private static let key = "aimhub.activeKey"
-
-    public static func save(_ info: KeyInfo) {
-        if let data = try? JSONEncoder().encode(info) {
-            defaults.set(data, forKey: key)
-        }
-    }
-
-    public static func load() -> KeyInfo? {
-        guard let data = defaults.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(KeyInfo.self, from: data)
-    }
-
-    public static func clear() {
-        defaults.removeObject(forKey: key)
-    }
-}
-
 public enum DeviceInfo {
+    private static let service = "com.aimhub.device"
+    private static let account = "deviceID"
+
     public static var identifier: String {
-        if let existing = UserDefaults.standard.string(forKey: "aimhub.deviceID") {
-            return existing
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        if status == errSecSuccess, let data = result as? Data,
+           let id = String(data: data, encoding: .utf8) {
+            return id
         }
+
         let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: "aimhub.deviceID")
+        let data = id.data(using: .utf8)!
+
+        if status == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            _ = SecItemAdd(addQuery as CFDictionary, nil)
+        }
         return id
     }
 
