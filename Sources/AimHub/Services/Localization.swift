@@ -115,14 +115,6 @@ public enum L10n {
         "sub.disconnected": [.vietnamese: "Mất kết nối", .english: "Disconnected"],
         "sub.credits": [.vietnamese: "GHI CÔNG", .english: "CREDITS"],
 
-        "update.blocked": [.vietnamese: "Bản này đã bị khóa", .english: "This build is blocked"],
-        "update.badge": [.vietnamese: "BẢN CẬP NHẬT MỚI ĐÃ CÓ", .english: "A NEW UPDATE IS AVAILABLE"],
-        "update.newVersion": [.vietnamese: "Dev đã phát hành phiên bản mới của AimHub.", .english: "The dev has released a new AimHub version."],
-        "update.notSupported": [.vietnamese: "Bản IPA bạn đang dùng không còn được hỗ trợ.", .english: "The IPA you're using is no longer supported."],
-        "update.removeIpa": [.vietnamese: "Vui lòng xóa bản IPA này và liên hệ", .english: "Please delete this IPA and contact"],
-        "update.contact": [.vietnamese: "Admin để nhận bản cập nhật mới nhất.", .english: "Admin for the latest update."],
-        "update.latestIs": [.vietnamese: "Bản mới nhất", .english: "Latest is"],
-
         // ===== Update blocked =====
         "update.tag": [.vietnamese: "BẢN CẬP NHẬT MỚI ĐÃ CÓ", .english: "NEW UPDATE AVAILABLE"],
         "update.title": [.vietnamese: "Bản này đã bị khóa", .english: "This version is blocked"],
