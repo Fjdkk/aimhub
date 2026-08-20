@@ -63,7 +63,7 @@ public final class MCMContainer {
         let setPartDomain: @convention(c) (Query?, UInt64) -> Void
         let getSingleResult: @convention(c) (Query?, UnsafeMutablePointer<ErrorRef?>) -> Object?
         let getLastError: @convention(c) (Query?) -> ErrorRef?
-        let iterateResultsSync: @convention(c) (Query?, UnsafeMutablePointer<ErrorRef?>, @convention(block) (Object?) -> Void) -> Int32
+        let iterateResultsSync: @convention(c) (Query?, @convention(block) (Object?) -> Void) -> Int32
         let free: @convention(c) (Query?) -> Void
         let objectGetPath: @convention(c) (Object?) -> UnsafeMutablePointer<CChar>?
         let objectGetIdentifier: @convention(c) (Object?) -> UnsafeMutablePointer<CChar>?
@@ -127,8 +127,8 @@ public final class MCMContainer {
 
     /// Phiên bản AN TOÀN của containerPath: chỉ dùng các symbol MCM đã xác
     /// minh ổn định (create → set_class → set_identifiers → set_flags →
-    /// set_part → get_single_result). KHÔNG gọi set_part_domain /
-    /// iterate_results_sync vì signature không chắc chắn → có thể crash.
+    /// set_part → get_single_result). KHÔNG gọi set_part_domain / dùng
+    /// get_single_result(query) với signature (query, err).
     public func containerPathBasic(
         forBundleID bundleID: String,
         identifier: String? = nil,
@@ -152,7 +152,7 @@ public final class MCMContainer {
             ids = arr as CFArray
         }
         fns.setIdentifiers(query, ids)
-        fns.setFlags(query, 0)
+        fns.setFlags(query, 0x900000000)
         fns.setPart(query, part)
 
         var err: ErrorRef? = nil
@@ -207,7 +207,7 @@ public final class MCMContainer {
             ids = arr as CFArray
         }
         fns.setIdentifiers(query, ids)
-        fns.setFlags(query, 0)
+        fns.setFlags(query, 0x900000000)
         fns.setPart(query, part)
         fns.setPartDomain(query, 0)
 
@@ -218,7 +218,7 @@ public final class MCMContainer {
         // lệnh trong lúc block chạy → phải lấy path + token ngay trong block.
         if obj == nil {
             var iteratedPath: String? = nil
-            let rc = fns.iterateResultsSync(query, &err) { candidate in
+            let rc = fns.iterateResultsSync(query) { candidate in
                 guard iteratedPath == nil, let candidate = candidate else { return }
                 guard let p = fns.objectGetPath(candidate) else { return }
                 iteratedPath = String(cString: p)
@@ -230,10 +230,10 @@ public final class MCMContainer {
                 }
             }
             if rc != 0 {
-                throw MCMError.queryFailed("iterate rc=\(rc) \(errorText(err ?? fns.getLastError(query)))")
+                throw MCMError.queryFailed("iterate rc=\(rc) \(errorText(fns.getLastError(query)))")
             }
             guard let path = iteratedPath else {
-                throw MCMError.queryFailed(errorText(err ?? fns.getLastError(query)))
+                throw MCMError.queryFailed(errorText(fns.getLastError(query)))
             }
             return path
         }
@@ -303,14 +303,14 @@ public final class MCMContainer {
         defer { fns.free(query) }
 
         fns.setClass(query, UInt64(cls.rawValue))
-        fns.setFlags(query, 0)
+        fns.setFlags(query, 0x100000000)
         fns.setPart(query, 0)
         fns.setPartDomain(query, 0)
 
         var err: ErrorRef? = nil
         var foundPath: String? = nil
         var rc: Int32 = 0
-        rc = fns.iterateResultsSync(query, &err) { current in
+        rc = fns.iterateResultsSync(query) { current in
             guard let current = current, foundPath == nil else { return }
             let ident: String? = {
                 guard let p = fns.objectGetIdentifier(current) else { return nil }
