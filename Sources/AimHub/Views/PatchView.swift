@@ -21,8 +21,8 @@ struct PatchView: View {
                 }
                 .padding(.vertical, 10)
 
-                SectionLabel(title: "THƯ VIỆN ONLINE")
-                Text("Chọn bản game bạn đang chơi để xem các mod có sẵn.")
+                SectionLabel(title: L10n.t("patch.online"))
+                Text(L10n.t("patch.subtitle"))
                     .font(.system(size: 13))
                     .foregroundColor(Theme.muted)
                     .padding(.horizontal, 4)
@@ -31,7 +31,7 @@ struct PatchView: View {
                 if loading && appState.games.isEmpty {
                     VStack {
                         ProgressView()
-                        Text("Đang tải...")
+                        Text(L10n.t("patch.loading"))
                             .font(.system(size: 13))
                             .foregroundColor(Theme.muted)
                             .padding(.top, 8)

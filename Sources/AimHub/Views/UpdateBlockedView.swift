@@ -14,7 +14,7 @@ struct UpdateBlockedView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 18))
                 .padding(.bottom, 18)
 
-            Text("BẢN CẬP NHẬT MỚI ĐÃ CÓ")
+            Text(L10n.t("update.badge"))
                 .font(.system(size: 11, weight: .bold))
                 .kerning(1)
                 .foregroundColor(.white)
@@ -30,17 +30,17 @@ struct UpdateBlockedView: View {
                 )
                 .padding(.bottom, 10)
 
-            Text("Bản này đã bị khóa")
+            Text(L10n.t("update.blocked"))
                 .font(.system(size: 19, weight: .heavy))
                 .foregroundColor(Theme.text)
                 .padding(.bottom, 10)
 
             VStack(spacing: 4) {
-                Text("Dev đã phát hành phiên bản mới của AimHub.")
-                Text("Bản IPA bạn đang dùng không còn được hỗ trợ.")
+                Text(L10n.t("update.newVersion"))
+                Text(L10n.t("update.notSupported"))
                 Text("")
-                Text("Vui lòng xóa bản IPA này và liên hệ")
-                Text("Admin để nhận bản cập nhật mới nhất.")
+                Text(L10n.t("update.removeIpa"))
+                Text(L10n.t("update.contact"))
             }
             .font(.system(size: 13))
             .foregroundColor(Theme.muted)
@@ -50,7 +50,7 @@ struct UpdateBlockedView: View {
 
             if let url = URL(string: "https://zalo.me/0336898934") {
                 Link(destination: url) {
-                    Text("LIÊN HỆ ADMIN")
+                    Text(L10n.t("key.contactTitle"))
                 }
                 .primaryButton()
                 .padding(.horizontal, 24)
@@ -59,7 +59,7 @@ struct UpdateBlockedView: View {
             Spacer()
 
             VStack(spacing: 6) {
-                Text("AimHub \(appState.versionInfo?.latestVersion ?? "1.0") · Bản mới nhất: \(appState.versionInfo?.latestVersion ?? "—")")
+                Text("AimHub \(appState.versionInfo?.latestVersion ?? "1.0") · \(L10n.t("update.latestIs")): \(appState.versionInfo?.latestVersion ?? "—")")
                     .font(.system(size: 11))
                     .foregroundColor(Theme.muted.opacity(0.7))
             }

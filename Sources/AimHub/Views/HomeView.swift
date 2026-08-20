@@ -11,13 +11,13 @@ struct HomeView: View {
 
                 statusCard
 
-                SectionLabel(title: "THIẾT BỊ")
+                SectionLabel(title: L10n.t("home.devices"))
                 deviceCard
 
                 openGameButton
                     .padding(.top, 18)
 
-                SectionLabel(title: "THÔNG BÁO")
+                SectionLabel(title: L10n.t("home.notices"))
                 if appState.notificationsEnabled {
                     noticeBanner
                 } else {
@@ -25,7 +25,7 @@ struct HomeView: View {
                         Circle()
                             .fill(Theme.muted)
                             .frame(width: 9, height: 9)
-                        Text("Đã tắt thông báo")
+                        Text(L10n.t("home.notifsOff"))
                             .font(.system(size: 14))
                             .foregroundColor(Theme.muted)
                         Spacer()
@@ -36,7 +36,7 @@ struct HomeView: View {
                     .card(padding: 14)
                 }
 
-                SectionLabel(title: "THỐNG KÊ")
+                SectionLabel(title: L10n.t("home.stats"))
                 statsCard
             }
             .padding(.horizontal, 16)
@@ -73,38 +73,64 @@ struct HomeView: View {
     }
 
     private var statusCard: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(appState.isConnected ? Theme.green : Theme.red)
-                .frame(width: 9, height: 9)
-                .shadow(color: (appState.isConnected ? Theme.green : Theme.red).opacity(0.8), radius: 4)
-            Text(appState.isConnected ? "Đã kết nối server ✓" : "Mất kết nối server")
-                .font(.system(size: 14))
-                .foregroundColor(Theme.text)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(appState.isConnected ? Theme.green : Theme.red)
+                    .frame(width: 9, height: 9)
+                    .shadow(color: (appState.isConnected ? Theme.green : Theme.red).opacity(0.8), radius: 4)
+                Text(appState.isConnected ? L10n.t("home.connected") : L10n.t("home.disconnected"))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.text)
+            }
+            if appState.isConnected {
+                HStack(spacing: 10) {
+                    Label("\(appState.pingMs ?? 0) ms", systemImage: "wifi")
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.muted)
+                    Spacer()
+                    Label("\(appState.appFPS)", systemImage: "speedometer")
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.muted)
+                }
+                HStack(spacing: 10) {
+                    Text("\(L10n.t("home.connectedSince")) \(connectedTimeText)")
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.muted)
+                    Spacer()
+                }
+            }
         }
         .card(padding: 14)
+    }
+
+    private var connectedTimeText: String {
+        guard let since = appState.connectedSince else { return "—" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: since)
     }
 
     private var deviceCard: some View {
         VStack(spacing: 10) {
             HStack {
-                Text("Model").foregroundColor(Theme.text)
+                Text(L10n.t("home.model")).foregroundColor(Theme.text)
                 Spacer()
                 Text(DeviceInfo.modelName).foregroundColor(Theme.muted)
             }
             HStack {
-                Text("iOS").foregroundColor(Theme.text)
+                Text(L10n.t("home.ios")).foregroundColor(Theme.text)
                 Spacer()
                 Text(DeviceInfo.osVersion).foregroundColor(Theme.muted)
             }
             HStack {
-                Text("Game").foregroundColor(Theme.text)
+                Text(L10n.t("home.game")).foregroundColor(Theme.text)
                 Spacer()
                 if let game = appState.activeGame {
-                    Text("\(game.name): Đã chọn ✓")
+                    Text("\(game.name): \(L10n.t("home.gameSelected"))")
                         .foregroundColor(Theme.green)
                 } else {
-                    Text("Chưa chọn")
+                    Text(L10n.t("home.noGame"))
                         .foregroundColor(Theme.orange)
                 }
             }
@@ -123,10 +149,10 @@ struct HomeView: View {
                     .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(appState.activeGame?.name ?? "Chưa chọn game")
+                    Text(appState.activeGame?.name ?? L10n.t("home.noGameTitle"))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
-                    Text(appState.activeGame == nil ? "Vào tab PATCH để chọn game" : "Bấm để mở game đã chọn")
+                    Text(appState.activeGame == nil ? L10n.t("home.pickInPatch") : L10n.t("home.openGame"))
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.85))
                 }
@@ -166,7 +192,7 @@ struct HomeView: View {
                     .foregroundColor(Theme.text)
                     .lineLimit(1)
             } else {
-                Text("Chưa có thông báo")
+                Text(L10n.t("home.noNotice"))
                     .font(.system(size: 14))
                     .foregroundColor(Theme.text)
             }
@@ -177,7 +203,7 @@ struct HomeView: View {
 
     private var statsCard: some View {
         HStack {
-            Text("Mod đang bật").foregroundColor(Theme.text)
+            Text(L10n.t("home.modsOn")).foregroundColor(Theme.text)
             Spacer()
             Text("\(appState.activeModID != nil ? 1 : 0) / \(totalMods)")
                 .foregroundColor(Theme.muted)

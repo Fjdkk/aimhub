@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 @MainActor
 final class AppState: ObservableObject {
@@ -11,8 +12,16 @@ final class AppState: ObservableObject {
     @Published var announcements: [Announcement] = []
     @Published var versionInfo: VersionInfo?
     @Published var sessionLog: [LogEntry] = []
-    @Published var language: Language = .vietnamese
+    @Published var language: Language {
+        didSet {
+            L10n.current = language
+            UserDefaults.standard.set(language.rawValue, forKey: languageKey)
+        }
+    }
     @Published var games: [Game] = []
+    @Published var pingMs: Int?
+    @Published var appFPS: Int = 0
+    @Published var connectedSince: Date?
     @Published var notificationsEnabled: Bool {
         didSet { UserDefaults.standard.set(notificationsEnabled, forKey: notificationsKey) }
     }
@@ -22,10 +31,33 @@ final class AppState: ObservableObject {
     private let activeModKey = "aimhub.activeModID"
     private let lastActiveKey = "aimhub.session.lastActiveAt"
     private let notificationsKey = "aimhub.notificationsEnabled"
+    private let languageKey = "aimhub.language"
     private var heartbeatTask: Task<Void, Never>?
+    private var displayLink: CADisplayLink?
 
     init() {
         notificationsEnabled = UserDefaults.standard.bool(forKey: notificationsKey)
+        if let raw = UserDefaults.standard.string(forKey: languageKey),
+           let lang = Language(rawValue: raw) {
+            language = lang
+        } else {
+            language = .vietnamese
+        }
+        L10n.current = language
+        startFPSMonitor()
+    }
+
+    // MARK: - FPS monitor (CADisplayLink, ~1 lần/giây)
+
+    private func startFPSMonitor() {
+        guard displayLink == nil else { return }
+        let link = CADisplayLink(target: FPSTarget { [weak self] fps in
+            Task { @MainActor in
+                self?.appFPS = fps
+            }
+        }, selector: #selector(FPSTarget.tick(_:)))
+        link.add(to: .main, forMode: .common)
+        displayLink = link
     }
 
     func start() {
@@ -86,13 +118,25 @@ final class AppState: ObservableObject {
         do {
             games = try await server.fetchGames()
             isConnected = true
+            if connectedSince == nil { connectedSince = Date() }
             log("Kết nối máy chủ thành công")
             if let saved = UserDefaults.standard.string(forKey: "activeBundleID") {
                 activeGame = games.first(where: { $0.bundleID == saved })
             }
+            await measurePing()
         } catch {
             isConnected = false
             log("Lỗi kết nối máy chủ")
+        }
+    }
+
+    /// Đo ping mỗi 5 giây khi đang kết nối.
+    private func measurePing() async {
+        while isConnected {
+            if let ms = await server.ping() {
+                pingMs = ms
+            }
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
         }
     }
 
@@ -247,6 +291,32 @@ final class AppState: ObservableObject {
             announcements = try await server.fetchAnnouncements()
         } catch {
             log("Không tải được thông báo")
+        }
+    }
+
+    deinit {
+        displayLink?.invalidate()
+        heartbeatTask?.cancel()
+    }
+}
+
+/// Nhận callback FPS mỗi giây mà không giữ vòng đời phức tạp.
+final class FPSTarget: NSObject {
+    private let handler: (Int) -> Void
+    private var frameCount = 0
+    private var lastSecond = Date()
+
+    init(_ handler: @escaping (Int) -> Void) {
+        self.handler = handler
+    }
+
+    @objc func tick(_ link: CADisplayLink) {
+        frameCount += 1
+        let now = Date()
+        if now.timeIntervalSince(lastSecond) >= 1.0 {
+            handler(frameCount)
+            frameCount = 0
+            lastSecond = now
         }
     }
 }

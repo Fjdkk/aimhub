@@ -27,9 +27,9 @@ struct SettingsView: View {
                 }
                 .padding(.vertical, 10)
 
-                SectionLabel(title: "CÀI ĐẶT")
+                SectionLabel(title: L10n.t("settings.section"))
 
-                settingsRow("key", title: "Key của tôi", action: { route = .keyDetail })
+                settingsRow("key", title: L10n.t("settings.myKey"), action: { route = .keyDetail })
 
                 Toggle(isOn: $appState.notificationsEnabled) {
                     HStack(spacing: 12) {
@@ -37,7 +37,7 @@ struct SettingsView: View {
                             .font(.system(size: 18))
                             .foregroundColor(Theme.accent)
                             .frame(width: 26)
-                        Text("Thông báo")
+                        Text(L10n.t("settings.notifs"))
                             .font(.system(size: 15))
                             .foregroundColor(Theme.text)
                     }
@@ -52,14 +52,14 @@ struct SettingsView: View {
                 )
                 .padding(.bottom, 10)
 
-                settingsRow("bell.badge", title: "Lịch sử thông báo", action: { route = .notices })
-                settingsRow("wrench.and.screwdriver", title: "Trợ giúp / Liên hệ", action: { route = .help })
-                settingsRow("list.bullet", title: "Nhật ký phiên", action: { route = .log })
-                settingsRow("globe", title: "Ngôn ngữ", action: { route = .lang })
-                settingsRow("info.circle", title: "Thông tin ứng dụng", action: { route = .about })
+                settingsRow("bell.badge", title: L10n.t("settings.notifHistory"), action: { route = .notices })
+                settingsRow("wrench.and.screwdriver", title: L10n.t("settings.help"), action: { route = .help })
+                settingsRow("list.bullet", title: L10n.t("settings.log"), action: { route = .log })
+                settingsRow("globe", title: L10n.t("settings.language"), action: { route = .lang })
+                settingsRow("info.circle", title: L10n.t("settings.about"), action: { route = .about })
 
                 if appState.activeGame != nil {
-                    settingsRow("stethoscope", title: "Chẩn đoán container game", action: {
+                    settingsRow("stethoscope", title: L10n.t("settings.diag"), action: {
                         if let game = appState.activeGame {
                             appState.diagnoseContainer(for: game)
                             route = .log
@@ -76,7 +76,7 @@ struct SettingsView: View {
                         Image(systemName: "bubble.left.and.bubble.right")
                             .font(.system(size: 18))
                             .foregroundColor(Theme.accent)
-                        Text("Liên hệ Admin")
+                        Text(L10n.t("settings.contactAdmin"))
                             .font(.system(size: 15))
                             .foregroundColor(Theme.text)
                         Spacer()

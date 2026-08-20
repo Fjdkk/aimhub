@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct KeyView: View {
     @EnvironmentObject var appState: AppState
@@ -35,13 +36,13 @@ struct KeyView: View {
                 .padding(.bottom, 22)
 
                 // Tiêu đề
-                Text("NHẬP KEY KÍCH HOẠT")
+                Text(L10n.t("key.title"))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(Theme.text)
                     .opacity(appear ? 1 : 0)
                     .offset(y: appear ? 0 : 10)
 
-                Text("Nhập key được cấp để mở khóa AimHub trên thiết bị này.")
+                Text(L10n.t("key.subtitle"))
                     .font(.system(size: 13))
                     .foregroundColor(Theme.muted)
                     .multilineTextAlignment(.center)
@@ -57,7 +58,7 @@ struct KeyView: View {
                         .font(.system(size: 15))
                         .foregroundColor(Theme.muted)
 
-                    TextField("Nhập mã key...", text: $keyInput)
+                    TextField(L10n.t("key.placeholder"), text: $keyInput)
                         .autocapitalization(.allCharacters)
                         .disableAutocorrection(true)
                         .multilineTextAlignment(.leading)
@@ -119,10 +120,10 @@ struct KeyView: View {
                         if loading {
                             HStack(spacing: 10) {
                                 ProgressView().tint(.white)
-                                Text("ĐANG KÍCH HOẠT...")
+                                Text(L10n.t("key.activating"))
                             }
                         } else {
-                            Text("KÍCH HOẠT")
+                            Text(L10n.t("key.activate"))
                         }
                     }
                 }
@@ -134,7 +135,7 @@ struct KeyView: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: loading)
                 .padding(.bottom, 14)
 
-                Button("ĐỔI KEY") {
+                Button(L10n.t("key.change")) {
                     withAnimation(.easeOut(duration: 0.2)) {
                         keyInput = ""
                         errorText = nil
@@ -147,16 +148,37 @@ struct KeyView: View {
 
                 Spacer()
 
-                VStack(spacing: 6) {
-                    Text("© 2026 AimHub — Dev Quốc Dũng")
+                VStack(spacing: 10) {
+                    Button {
+                        if let url = URL(string: "https://zalo.me/0336898934") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .font(.system(size: 13))
+                            Text(L10n.t("key.contactTitle"))
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundColor(Theme.accent)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 9)
+                        .background(Theme.accent.opacity(0.12))
+                        .cornerRadius(20)
+                        .overlay(
+                            Capsule()
+                                .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
+                        )
+                    }
+                    Text(L10n.t("key.copyright"))
                         .font(.system(size: 12))
                         .foregroundColor(Theme.muted)
-                    Text("Phiên bản 1.0")
+                    Text("\(L10n.t("sub.currentVersion")) \(versionString)")
                         .font(.system(size: 11))
                         .foregroundColor(Theme.muted.opacity(0.7))
                 }
-                .padding(.bottom, 20)
                 .opacity(appear ? 1 : 0)
+                .padding(.bottom, 20)
             }
         }
         .onAppear {
@@ -169,11 +191,11 @@ struct KeyView: View {
     private func activate() {
         let value = keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
-            showError("Vui lòng nhập key.")
+            showError(L10n.t("key.empty"))
             return
         }
         guard value.count >= 8 else {
-            showError("Key không tồn tại.")
+            showError(L10n.t("key.invalid"))
             return
         }
         errorText = nil
@@ -203,5 +225,9 @@ struct KeyView: View {
                 shake = false
             }
         }
+    }
+
+    private var versionString: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 }

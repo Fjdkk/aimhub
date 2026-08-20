@@ -32,7 +32,7 @@ struct KeyDetailView: View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                SheetNavBar(title: "Key của tôi")
+                SheetNavBar(title: L10n.t("sub.myKey"))
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         VStack(spacing: 6) {
@@ -42,18 +42,18 @@ struct KeyDetailView: View {
                             Text(appState.activeKey?.key ?? "—")
                                 .font(.system(size: 20, weight: .heavy))
                                 .foregroundColor(Theme.text)
-                            Text("Đăng nhập thành công ✓")
+                            Text(L10n.t("sub.loggedIn"))
                                 .font(.system(size: 13))
                                 .foregroundColor(Theme.green)
                         }
                         .frame(maxWidth: .infinity)
                         .card(padding: 18)
 
-                        SectionLabel(title: "THÔNG TIN KEY")
+                        SectionLabel(title: L10n.t("sub.keyInfo"))
                         VStack(spacing: 0) {
                             kvRow("Key", appState.activeKey?.key ?? "—")
-                            kvRow("Thiết bị", DeviceInfo.modelName)
-                            kvRow("Thời gian còn lại", expiresText)
+                            kvRow(L10n.t("sub.device"), DeviceInfo.modelName)
+                            kvRow(L10n.t("sub.timeLeft"), expiresText)
                         }
                         .card(padding: 12)
 
@@ -61,7 +61,7 @@ struct KeyDetailView: View {
                             appState.clearKey()
                             dismiss()
                         } label: {
-                            Text("ĐỔI KEY")
+                            Text(L10n.t("key.change"))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                                 .foregroundColor(Theme.text)
@@ -89,7 +89,7 @@ struct KeyDetailView: View {
             formatter.locale = Locale(identifier: "vi_VN")
             return formatter.string(from: date)
         }
-        return "Vĩnh viễn"
+        return L10n.t("sub.forever")
     }
 
     private func kvRow(_ key: String, _ value: String) -> some View {
@@ -111,7 +111,7 @@ struct NoticesView: View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                SheetNavBar(title: "Thông báo")
+                SheetNavBar(title: L10n.t("sub.notices"))
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(appState.announcements.enumerated()), id: \.element.id) { index, ann in
@@ -141,7 +141,7 @@ struct NoticesView: View {
                             }
                         }
                         if appState.announcements.isEmpty {
-                            Text("Chưa có thông báo.")
+                            Text(L10n.t("sub.noNotices"))
                                 .font(.system(size: 13))
                                 .foregroundColor(Theme.muted)
                                 .frame(maxWidth: .infinity)
@@ -164,14 +164,14 @@ struct HelpView: View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                SheetNavBar(title: "Trợ giúp / Liên hệ")
+                SheetNavBar(title: L10n.t("sub.helpContact"))
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        SectionLabel(title: "HƯỚNG DẪN SỬ DỤNG")
+                        SectionLabel(title: L10n.t("sub.howto"))
                         VStack(spacing: 14) {
-                            step(1, "Chọn game (Free Fire / FF Max)")
-                            step(2, "Bật mod mong muốn")
-                            step(3, "Mở game chơi")
+                            step(1, L10n.t("sub.step1"))
+                            step(2, L10n.t("sub.step2"))
+                            step(3, L10n.t("sub.step3"))
                         }
                         .card(padding: 14)
 
@@ -180,7 +180,7 @@ struct HelpView: View {
                                 UIApplication.shared.open(url)
                             }
                         } label: {
-                            Text("BÁO LỖI")
+                            Text(L10n.t("sub.report"))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                                 .foregroundColor(Theme.text)
@@ -193,7 +193,7 @@ struct HelpView: View {
                         }
                         .padding(.top, 14)
 
-                        SectionLabel(title: "LIÊN HỆ")
+                        SectionLabel(title: L10n.t("sub.contact"))
                         Button {
                             if let url = URL(string: "https://zalo.me/0336898934") {
                                 UIApplication.shared.open(url)
@@ -247,11 +247,11 @@ struct LogView: View {
                             .font(.system(size: 22, weight: .medium))
                             .foregroundColor(Theme.muted)
                     }
-                    Text("Nhật ký phiên")
+                    Text(L10n.t("sub.log"))
                         .font(.system(size: 17, weight: .bold))
                         .foregroundColor(Theme.text)
                     Spacer()
-                    Button("XÓA") {
+                    Button(L10n.t("sub.clear")) {
                         appState.clearLog()
                     }
                     .font(.system(size: 13, weight: .medium))
@@ -281,7 +281,7 @@ struct LogView: View {
                             }
                         }
                         if appState.sessionLog.isEmpty {
-                            Text("Chưa có nhật ký.")
+                            Text(L10n.t("sub.noLog"))
                                 .font(.system(size: 13))
                                 .foregroundColor(Theme.muted)
                                 .frame(maxWidth: .infinity)
@@ -311,7 +311,7 @@ struct LanguageView: View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                SheetNavBar(title: "Ngôn ngữ")
+                SheetNavBar(title: L10n.t("sub.language"))
                 VStack(spacing: 0) {
                     langRow("Tiếng Việt", .vietnamese)
                     langRow("English", .english)
@@ -355,7 +355,7 @@ struct AboutView: View {
         ZStack {
             Theme.bg.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                SheetNavBar(title: "Thông tin ứng dụng")
+                SheetNavBar(title: L10n.t("sub.about"))
                 ScrollView {
                     VStack(spacing: 0) {
                         VStack(spacing: 4) {
@@ -368,20 +368,20 @@ struct AboutView: View {
                             Text("AimHub")
                                 .font(.system(size: 17, weight: .heavy))
                                 .foregroundColor(Theme.text)
-                            Text("Phiên bản 1.0")
+                            Text("\(L10n.t("sub.currentVersion")) \(versionString)")
                                 .font(.system(size: 12))
                                 .foregroundColor(Theme.muted)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 16)
 
-                        SectionLabel(title: "PHIÊN BẢN")
+                        SectionLabel(title: L10n.t("sub.version"))
                         VStack(spacing: 0) {
-                            kv("Phiên bản hiện tại", versionString)
-                            kv("Xác minh", "Bản mới nhất ✓", color: Theme.green)
-                            kv("Hỗ trợ iOS", "Được hỗ trợ ✓", color: Theme.green)
+                            kv(L10n.t("sub.currentVersion"), versionString)
+                            kv(L10n.t("sub.verify"), L10n.t("sub.latest"), color: Theme.green)
+                            kv(L10n.t("sub.iosSupport"), L10n.t("sub.supported"), color: Theme.green)
                             HStack {
-                                Text("Phạm vi đã xác minh").foregroundColor(Theme.muted)
+                                Text(L10n.t("sub.verifiedRange")).foregroundColor(Theme.muted)
                                 Spacer()
                                 Text(iosRange)
                                     .font(.system(size: 12))
@@ -392,18 +392,18 @@ struct AboutView: View {
                         }
                         .card(padding: 12)
 
-                        SectionLabel(title: "THIẾT BỊ")
+                        SectionLabel(title: L10n.t("sub.deviceSect"))
                         VStack(spacing: 0) {
-                            kv("Model", DeviceInfo.modelName)
-                            kv("iOS", DeviceInfo.osVersion)
-                            kv("Mã thiết bị", DeviceInfo.identifier)
-                            kv("Trạng thái",
-                               appState.isConnected ? "Đã kết nối server ✓" : "Mất kết nối",
+                            kv(L10n.t("home.model"), DeviceInfo.modelName)
+                            kv(L10n.t("home.ios"), DeviceInfo.osVersion)
+                            kv(L10n.t("sub.deviceID"), DeviceInfo.identifier)
+                            kv(L10n.t("sub.status"),
+                               appState.isConnected ? L10n.t("sub.connected") : L10n.t("sub.disconnected"),
                                color: appState.isConnected ? Theme.green : Theme.red)
                         }
                         .card(padding: 12)
 
-                        SectionLabel(title: "GHI CÔNG")
+                        SectionLabel(title: L10n.t("sub.credits"))
                         VStack(spacing: 0) {
                             kv("AimHub", "Dev Quốc Dũng", color: Theme.accent)
                             kv("FilzaSlop", "file browser & sandbox escape")

@@ -14,12 +14,22 @@ struct RootView: View {
 
             if appState.forceUpdate {
                 UpdateBlockedView()
+                    .transition(.opacity)
             } else if appState.activeKey == nil {
                 KeyView()
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.98)),
+                        removal: .opacity.combined(with: .scale(scale: 1.02))
+                    ))
             } else {
                 mainContent
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 1.02)),
+                        removal: .opacity
+                    ))
             }
         }
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: appState.activeKey)
         .onAppear {
             appState.start()
             Task {
@@ -46,9 +56,9 @@ struct RootView: View {
 
     private var tabBar: some View {
         HStack {
-            tabButton(.home, icon: "house.fill", label: "HOME")
-            tabButton(.patch, icon: "scope", label: "PATCH")
-            tabButton(.settings, icon: "gearshape.fill", label: "SETTINGS")
+            tabButton(.home, icon: "house.fill", label: L10n.t("tab.home"))
+            tabButton(.patch, icon: "scope", label: L10n.t("tab.patch"))
+            tabButton(.settings, icon: "gearshape.fill", label: L10n.t("tab.settings"))
         }
         .padding(.top, 12)
         .padding(.bottom, 8)

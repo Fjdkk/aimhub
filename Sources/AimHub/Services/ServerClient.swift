@@ -209,6 +209,25 @@ public final class ServerClient {
         try await get("/api/version")
     }
 
+    /// Đo độ trễ mạng (ms) bằng request nhẹ tới /api/version.
+    public func ping() async -> Int? {
+        let url: URL
+        do {
+            url = try makeURL("/api/version")
+        } catch {
+            return nil
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        let start = Date()
+        do {
+            _ = try await URLSession.shared.data(for: request)
+            return Int(Date().timeIntervalSince(start) * 1000)
+        } catch {
+            return nil
+        }
+    }
+
     public func downloadRuleFile(ruleID: String) async throws -> Data {
         let url = try makeURL("/api/rules/\(ruleID)/file")
         var request = URLRequest(url: url)

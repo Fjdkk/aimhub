@@ -20,7 +20,7 @@ struct ModListView: View {
                 header
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("Chỉ được bật 1 mod. Bật mod khác thì mod cũ tự tắt.")
+                        Text(L10n.t("mod.oneAtATime"))
                             .font(.system(size: 12))
                             .foregroundColor(Theme.muted)
                             .padding(.horizontal, 4)
@@ -35,7 +35,7 @@ struct ModListView: View {
                                 modRow(rule)
                             }
                             if rules.isEmpty {
-                                Text("Chưa có mod nào cho game này.")
+                                Text(L10n.t("mod.none"))
                                     .font(.system(size: 13))
                                     .foregroundColor(Theme.muted)
                                     .frame(maxWidth: .infinity)
@@ -46,7 +46,7 @@ struct ModListView: View {
                         resetButton
                             .padding(.top, 16)
 
-                        Text("Khi bật mod, file gốc của game được tự sao lưu trước khi ghi. Bấm RESET để khôi phục file gốc và tắt hết mod.")
+                        Text(L10n.t("mod.resetHint"))
                             .font(.system(size: 11))
                             .foregroundColor(Theme.muted.opacity(0.75))
                             .padding(.horizontal, 4)
@@ -189,11 +189,6 @@ struct ModListView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(isOn ? .white : Theme.text)
                     .shadow(color: isOn ? Theme.accent.opacity(0.7) : .clear, radius: 8)
-                if let size = rule.size, size > 0 {
-                    Text("\(size) bytes")
-                        .font(.system(size: 11))
-                        .foregroundColor(Theme.muted)
-                }
             }
 
             Spacer()
@@ -236,7 +231,7 @@ struct ModListView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.counterclockwise")
-                Text("RESET MẶC ĐỊNH")
+                Text(L10n.t("mod.reset"))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
@@ -259,7 +254,7 @@ if appState.activeModID == rule.ruleID {
                 do {
                     try await appState.restoreAll()
                     busyModID = nil
-                    showToast("Đã tắt \(rule.name) và khôi phục file gốc")
+                    showToast(String(format: L10n.t("mod.off"), rule.name))
                 } catch {
                     busyModID = nil
                     errorText = error.localizedDescription
@@ -273,7 +268,7 @@ if appState.activeModID == rule.ruleID {
                 let modEntry = try await buildModEntry(rule, game: game)
                 try await appState.installMod(modEntry)
                 busyModID = nil
-                showToast("Đã bật \(rule.name) ✓")
+                showToast(String(format: L10n.t("mod.on"), rule.name))
                 appState.openGame()
             } catch {
                 busyModID = nil
@@ -288,7 +283,7 @@ if appState.activeModID == rule.ruleID {
             do {
                 try await appState.restoreAll()
                 busyModID = nil
-                showToast("Đã khôi phục toàn bộ file gốc")
+                showToast(L10n.t("mod.allRestored"))
             } catch {
                 busyModID = nil
                 errorText = error.localizedDescription
