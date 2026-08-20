@@ -24,19 +24,12 @@ struct KeyView: View {
                 Spacer()
 
                 // Logo
-                ZStack {
-                    Circle()
-                        .fill(Theme.gradient().opacity(0.22))
-                        .frame(width: 120, height: 120)
-                        .blur(radius: 18)
-
-                    Image("Logo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 88, height: 88)
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .shadow(color: Theme.accent.opacity(0.45), radius: 18, y: 8)
-                }
+                Image("Logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 88, height: 88)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .shadow(color: .black.opacity(0.45), radius: 6, y: 3)
                 .scaleEffect(appear ? 1 : 0.6)
                 .opacity(appear ? 1 : 0)
                 .padding(.bottom, 22)

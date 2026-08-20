@@ -71,8 +71,6 @@ public final class MCMContainer {
         let copySandboxToken: @convention(c) (Object?) -> UnsafeMutablePointer<CChar>?
         let sandboxExtensionActivate: @convention(c) (Object?, Bool) -> Bool
         let objectFree: @convention(c) (Object?) -> Void
-        let sandboxExtensionConsume: @convention(c) (UnsafePointer<CChar>?) -> Int64
-        let sandboxExtensionRelease: @convention(c) (Int64) -> Int32
         let errorGetPosixErrno: @convention(c) (ErrorRef?) -> Int32
         let errorGetMessage: @convention(c) (ErrorRef?) -> UnsafePointer<CChar>?
         let xpcStringCreate: @convention(c) (UnsafePointer<CChar>?) -> OpaquePointer?
@@ -112,8 +110,6 @@ public final class MCMContainer {
             copySandboxToken: try sym("container_copy_sandbox_token"),
             sandboxExtensionActivate: try sym("container_object_sandbox_extension_activate"),
             objectFree: try sym("container_object_free"),
-            sandboxExtensionConsume: try symGlobal("sandbox_extension_consume"),
-            sandboxExtensionRelease: try symGlobal("sandbox_extension_release"),
             errorGetPosixErrno: try sym("container_error_get_posix_errno"),
             errorGetMessage: try sym("container_error_get_message"),
             xpcStringCreate: try symGlobal("xpc_string_create"),
@@ -129,6 +125,40 @@ public final class MCMContainer {
             return String(cString: msg)
         }
         return "errno=\(fns.errorGetPosixErrno(e))"
+    }
+
+    /// Chuẩn hóa path giống app tham chiếu: "/var" → "/private/var".
+    private func normalizePath(_ path: String) -> String {
+        if path == "/var" || path.hasPrefix("/var/") {
+            return "/private" + path
+        }
+        return path
+    }
+
+    /// Kích hoạt sandbox extension theo ĐÚNG app tham chiếu (activate: trong
+    /// mcm_bridge.m): objectCopy → copySandboxToken (kiểm tra token rỗng) →
+    /// free(token) → objectActivate(copy, false) → objectFree(copy).
+    /// Object gốc thuộc query — KHÔNG được free ở đây.
+    private func activateExtension(on object: Object) throws {
+        guard let fns = fns else { throw MCMError.dlopenFailed }
+        guard let copy = fns.objectCopy(object) else {
+            throw MCMError.objectFailed("copy")
+        }
+        defer { fns.objectFree(copy) }
+
+        guard let tokenPtr = fns.copySandboxToken(copy) else {
+            throw MCMError.objectFailed("no sandbox token")
+        }
+        let tokenPresent = tokenPtr.pointee != 0
+        free(tokenPtr)
+
+        guard tokenPresent else {
+            throw MCMError.activationFailed(0)
+        }
+        let ok = fns.sandboxExtensionActivate(copy, false)
+        guard ok else {
+            throw MCMError.activationFailed(errno)
+        }
     }
 
     /// Phiên bản AN TOÀN của containerPath: chỉ dùng các symbol MCM đã xác
@@ -166,26 +196,10 @@ public final class MCMContainer {
         guard let pathPtr = fns.objectGetPath(obj) else {
             throw MCMError.objectFailed("no path")
         }
-        let path = String(cString: pathPtr)
+        let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            // Theo app tham chiếu: copy object rồi activate bản copy
-            // (object gốc thuộc query, chỉ free query — KHÔNG free object).
-            if let copy = fns.objectCopy(obj) {
-                if let tokenPtr = fns.copySandboxToken(copy) {
-                    let token = String(cString: tokenPtr)
-                    free(tokenPtr)
-                    let h = fns.sandboxExtensionConsume(token)
-                    _ = h
-                } else {
-                    let ok = fns.sandboxExtensionActivate(copy, false)
-                    if !ok {
-                        fns.objectFree(copy)
-                        throw MCMError.activationFailed(0)
-                    }
-                }
-                fns.objectFree(copy)
-            }
+            try activateExtension(on: obj)
         }
 
         return path
@@ -224,17 +238,9 @@ public final class MCMContainer {
             let rc = fns.iterateResultsSync(query) { candidate in
                 guard iteratedPath == nil, let candidate = candidate else { return true }
                 guard let p = fns.objectGetPath(candidate) else { return true }
-                iteratedPath = String(cString: p)
-                if activateExtension, let copy = fns.objectCopy(candidate) {
-                    if let tokenPtr = fns.copySandboxToken(copy) {
-                        let token = String(cString: tokenPtr)
-                        free(tokenPtr)
-                        let h = fns.sandboxExtensionConsume(token)
-                        _ = h
-                    } else {
-                        _ = fns.sandboxExtensionActivate(copy, false)
-                    }
-                    fns.objectFree(copy)
+                iteratedPath = normalizePath(String(cString: p))
+                if activateExtension {
+                    try? activateExtension(on: candidate)
                 }
                 return true
             }
@@ -250,25 +256,10 @@ public final class MCMContainer {
         guard let pathPtr = fns.objectGetPath(obj) else {
             throw MCMError.objectFailed("no path")
         }
-        let path = String(cString: pathPtr)
+        let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            // Kích hoạt sandbox extension để có quyền ghi vào container
-            if let copy = fns.objectCopy(obj) {
-                if let tokenPtr = fns.copySandboxToken(copy) {
-                    let token = String(cString: tokenPtr)
-                    free(tokenPtr)
-                    let h = fns.sandboxExtensionConsume(token)
-                    _ = h
-                } else {
-                    let ok = fns.sandboxExtensionActivate(copy, false)
-                    if !ok {
-                        fns.objectFree(copy)
-                        throw MCMError.activationFailed(0)
-                    }
-                }
-                fns.objectFree(copy)
-            }
+            try activateExtension(on: obj)
         }
 
         return path
@@ -329,19 +320,8 @@ public final class MCMContainer {
                 return String(cString: p)
             }()
             if ident == bundleID, let path = path {
-                // Kích hoạt quyền truy cập container
-                if let copy = fns.objectCopy(current) {
-                    if let tokenPtr = fns.copySandboxToken(copy) {
-                        let token = String(cString: tokenPtr)
-                        free(tokenPtr)
-                        let h = fns.sandboxExtensionConsume(token)
-                        _ = h
-                    } else {
-                        _ = fns.sandboxExtensionActivate(copy, false)
-                    }
-                    fns.objectFree(copy)
-                }
-                foundPath = path
+                try? activateExtension(on: current)
+                foundPath = normalizePath(path)
                 return false
             }
             return true
