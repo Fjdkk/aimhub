@@ -17,6 +17,12 @@ enum Theme {
         LinearGradient(colors: [accent, accent2],
                        startPoint: .topLeading, endPoint: .bottomTrailing)
     }
+
+    /// SF Pro Text — font chuẩn iPhone. Áp dụng `.system(design: .default)` để
+    /// bắt buộc dùng gia đình SF Pro thay vì font hệ thống mặc định.
+    static func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight, design: .default)
+    }
 }
 
 struct CardModifier: ViewModifier {
@@ -48,34 +54,6 @@ extension View {
             .cornerRadius(14)
             .font(.system(size: 16, weight: .bold))
             .shadow(color: Theme.accent.opacity(0.3), radius: 12, y: 4)
-    }
-
-    /// Ép dùng SF Pro (font hệ thống chuẩn iPhone) trên toàn bộ view con.
-    @ViewBuilder
-    func sfPro() -> some View {
-        self
-            .font(.sfPro(.body))
-            .environment(\.font, .sfPro(.body))
-    }
-}
-
-extension Font {
-    /// SF Pro — font chuẩn iPhone, dùng `.system` với design mặc định.
-    static func sfPro(size: CGFloat = 16, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .default)
-    }
-
-    /// Variant dùng TextStyle (SF Pro tự động scale theo Dynamic Type).
-    static func sfPro(style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
-        .system(style, weight: weight, design: .default)
-    }
-}
-
-extension View {
-    /// Ép dùng SF Pro (font hệ thống chuẩn iPhone) trên toàn bộ view con.
-    @ViewBuilder
-    func sfPro() -> some View {
-        self.font(.sfPro(style: .body))
     }
 }
 
