@@ -56,25 +56,27 @@ public final class MCMContainer {
     private struct Fns {
         let create: @convention(c) () -> Query?
         let setClass: @convention(c) (Query?, UInt64) -> Void
-        let setIdentifiers: @convention(c) (Query?, CFArray) -> Void
-        let setGroupIdentifiers: @convention(c) (Query?, CFArray) -> Void
+        let setIdentifiers: @convention(c) (Query?, OpaquePointer?) -> Void
+        let setGroupIdentifiers: @convention(c) (Query?, OpaquePointer?) -> Void
         let setFlags: @convention(c) (Query?, UInt64) -> Void
         let setPart: @convention(c) (Query?, UInt64) -> Void
-        let setPartDomain: @convention(c) (Query?, UInt64) -> Void
-        let getSingleResult: @convention(c) (Query?, UnsafeMutablePointer<ErrorRef?>) -> Object?
+        let setPartDomain: @convention(c) (Query?, UnsafePointer<CChar>?) -> Void
+        let getSingleResult: @convention(c) (Query?) -> Object?
         let getLastError: @convention(c) (Query?) -> ErrorRef?
-        let iterateResultsSync: @convention(c) (Query?, @convention(block) (Object?) -> Void) -> Int32
+        let iterateResultsSync: @convention(c) (Query?, @convention(block) (Object?) -> Bool) -> Bool
         let free: @convention(c) (Query?) -> Void
         let objectGetPath: @convention(c) (Object?) -> UnsafeMutablePointer<CChar>?
         let objectGetIdentifier: @convention(c) (Object?) -> UnsafeMutablePointer<CChar>?
         let objectCopy: @convention(c) (Object?) -> Object?
         let copySandboxToken: @convention(c) (Object?) -> UnsafeMutablePointer<CChar>?
-        let sandboxExtensionActivate: @convention(c) (Object?, UnsafeMutablePointer<ErrorRef?>) -> Int32
+        let sandboxExtensionActivate: @convention(c) (Object?, Bool) -> Bool
         let objectFree: @convention(c) (Object?) -> Void
-        let sandboxExtensionConsume: @convention(c) (UnsafePointer<CChar>?) -> Int32
-        let sandboxExtensionRelease: @convention(c) (Int32) -> Int32
+        let sandboxExtensionConsume: @convention(c) (UnsafePointer<CChar>?) -> Int64
+        let sandboxExtensionRelease: @convention(c) (Int64) -> Int32
         let errorGetPosixErrno: @convention(c) (ErrorRef?) -> Int32
         let errorGetMessage: @convention(c) (ErrorRef?) -> UnsafeMutablePointer<CChar>?
+        let xpcStringCreate: @convention(c) (UnsafePointer<CChar>?) -> OpaquePointer?
+        let xpcRelease: @convention(c) (OpaquePointer?) -> Void
     }
 
     public init() throws {
@@ -85,6 +87,10 @@ public final class MCMContainer {
 
         func sym<T>(_ name: String) throws -> T {
             guard let p = dlsym(h, name) else { throw MCMError.symbolNotFound(name) }
+            return unsafeBitCast(p, to: T.self)
+        }
+        func symGlobal<T>(_ name: String) throws -> T {
+            guard let p = dlsym(RTLD_DEFAULT, name) else { throw MCMError.symbolNotFound(name) }
             return unsafeBitCast(p, to: T.self)
         }
 
@@ -106,10 +112,12 @@ public final class MCMContainer {
             copySandboxToken: try sym("container_copy_sandbox_token"),
             sandboxExtensionActivate: try sym("container_object_sandbox_extension_activate"),
             objectFree: try sym("container_object_free"),
-            sandboxExtensionConsume: try sym("sandbox_extension_consume"),
-            sandboxExtensionRelease: try sym("sandbox_extension_release"),
+            sandboxExtensionConsume: try symGlobal("sandbox_extension_consume"),
+            sandboxExtensionRelease: try symGlobal("sandbox_extension_release"),
             errorGetPosixErrno: try sym("container_error_get_posix_errno"),
-            errorGetMessage: try sym("container_error_get_message")
+            errorGetMessage: try sym("container_error_get_message"),
+            xpcStringCreate: try symGlobal("xpc_string_create"),
+            xpcRelease: try symGlobal("xpc_release")
         )
         fns = resolved
     }
@@ -143,26 +151,23 @@ public final class MCMContainer {
 
         fns.setClass(query, UInt64(cls.rawValue))
 
-        let ids: CFArray
-        if let identifier = identifier {
-            let arr = [bundleID, identifier] as NSArray
-            ids = arr as CFArray
-        } else {
-            let arr = [bundleID] as NSArray
-            ids = arr as CFArray
+        let id = identifier ?? bundleID
+        guard let xpcID = fns.xpcStringCreate(id) else {
+            throw MCMError.queryFailed("xpc_string_create")
         }
-        fns.setIdentifiers(query, ids)
+        defer { fns.xpcRelease(xpcID) }
+
+        fns.setIdentifiers(query, xpcID)
         fns.setFlags(query, 0x900000000)
         fns.setPart(query, part)
 
-        var err: ErrorRef? = nil
-        guard let obj = fns.getSingleResult(query, &err) else {
-            throw MCMError.queryFailed(errorText(err ?? fns.getLastError(query)))
+        guard let obj = fns.getSingleResult(query) else {
+            throw MCMError.queryFailed(errorText(fns.getLastError(query)))
         }
         defer { fns.objectFree(obj) }
 
         guard let pathPtr = fns.objectGetPath(obj) else {
-            throw MCMError.objectFailed(errorText(err))
+            throw MCMError.objectFailed("no path")
         }
         let path = String(cString: pathPtr)
         free(pathPtr)
@@ -171,12 +176,12 @@ public final class MCMContainer {
             if let tokenPtr = fns.copySandboxToken(obj) {
                 let token = String(cString: tokenPtr)
                 free(tokenPtr)
-                fns.sandboxExtensionConsume(token)
+                let h = fns.sandboxExtensionConsume(token)
+                _ = h
             } else {
-                var actErr: ErrorRef? = nil
-                let rc = fns.sandboxExtensionActivate(obj, &actErr)
-                if rc != 0 {
-                    throw MCMError.activationFailed(fns.errorGetPosixErrno(actErr))
+                let ok = fns.sandboxExtensionActivate(obj, false)
+                if !ok {
+                    throw MCMError.activationFailed(0)
                 }
             }
         }
@@ -198,39 +203,37 @@ public final class MCMContainer {
 
         fns.setClass(query, UInt64(cls.rawValue))
 
-        let ids: CFArray
-        if let identifier = identifier {
-            let arr = [bundleID, identifier] as NSArray
-            ids = arr as CFArray
-        } else {
-            let arr = [bundleID] as NSArray
-            ids = arr as CFArray
+        let id = identifier ?? bundleID
+        guard let xpcID = fns.xpcStringCreate(id) else {
+            throw MCMError.queryFailed("xpc_string_create")
         }
-        fns.setIdentifiers(query, ids)
+        defer { fns.xpcRelease(xpcID) }
+
+        fns.setIdentifiers(query, xpcID)
         fns.setFlags(query, 0x900000000)
         fns.setPart(query, part)
-        fns.setPartDomain(query, 0)
 
-        var err: ErrorRef? = nil
-        let obj = fns.getSingleResult(query, &err)
+        let obj = fns.getSingleResult(query)
 
         // Fallback: iterate_results_sync giống app tham chiếu. Object chỉ hợp
         // lệnh trong lúc block chạy → phải lấy path + token ngay trong block.
         if obj == nil {
             var iteratedPath: String? = nil
             let rc = fns.iterateResultsSync(query) { candidate in
-                guard iteratedPath == nil, let candidate = candidate else { return }
-                guard let p = fns.objectGetPath(candidate) else { return }
+                guard iteratedPath == nil, let candidate = candidate else { return true }
+                guard let p = fns.objectGetPath(candidate) else { return true }
                 iteratedPath = String(cString: p)
                 free(p)
                 if activateExtension, let tokenPtr = fns.copySandboxToken(candidate) {
                     let token = String(cString: tokenPtr)
                     free(tokenPtr)
-                    fns.sandboxExtensionConsume(token)
+                    let h = fns.sandboxExtensionConsume(token)
+                    _ = h
                 }
+                return true
             }
-            if rc != 0 {
-                throw MCMError.queryFailed("iterate rc=\(rc) \(errorText(fns.getLastError(query)))")
+            if !rc {
+                throw MCMError.queryFailed("iterate denied \(errorText(fns.getLastError(query)))")
             }
             guard let path = iteratedPath else {
                 throw MCMError.queryFailed(errorText(fns.getLastError(query)))
@@ -240,7 +243,7 @@ public final class MCMContainer {
         defer { fns.objectFree(obj) }
 
         guard let pathPtr = fns.objectGetPath(obj) else {
-            throw MCMError.objectFailed(errorText(err))
+            throw MCMError.objectFailed("no path")
         }
         let path = String(cString: pathPtr)
         free(pathPtr)
@@ -250,12 +253,12 @@ public final class MCMContainer {
             if let tokenPtr = fns.copySandboxToken(obj) {
                 let token = String(cString: tokenPtr)
                 free(tokenPtr)
-                fns.sandboxExtensionConsume(token)
+                let h = fns.sandboxExtensionConsume(token)
+                _ = h
             } else {
-                var actErr: ErrorRef? = nil
-                let rc = fns.sandboxExtensionActivate(obj, &actErr)
-                if rc != 0 {
-                    throw MCMError.activationFailed(fns.errorGetPosixErrno(actErr))
+                let ok = fns.sandboxExtensionActivate(obj, false)
+                if !ok {
+                    throw MCMError.activationFailed(0)
                 }
             }
         }
@@ -270,20 +273,21 @@ public final class MCMContainer {
         defer { fns.free(query) }
 
         fns.setClass(query, UInt64(MCMContainerClass.data.rawValue))
-        let arr = [bundleID] as NSArray
-        fns.setIdentifiers(query, arr as CFArray)
-        fns.setFlags(query, 0)
+        guard let xpcID = fns.xpcStringCreate(bundleID) else {
+            throw MCMError.queryFailed("xpc_string_create")
+        }
+        defer { fns.xpcRelease(xpcID) }
+        fns.setIdentifiers(query, xpcID)
+        fns.setFlags(query, 0x900000000)
         fns.setPart(query, 0)
-        fns.setPartDomain(query, 0)
 
-        var err: ErrorRef? = nil
-        guard let obj = fns.getSingleResult(query, &err) else {
-            throw MCMError.queryFailed(errorText(err ?? fns.getLastError(query)))
+        guard let obj = fns.getSingleResult(query) else {
+            throw MCMError.queryFailed(errorText(fns.getLastError(query)))
         }
         defer { fns.objectFree(obj) }
 
         guard let tok = fns.copySandboxToken(obj) else {
-            throw MCMError.objectFailed(errorText(err))
+            throw MCMError.objectFailed("no token")
         }
         let token = String(cString: tok)
         free(tok)
@@ -305,13 +309,10 @@ public final class MCMContainer {
         fns.setClass(query, UInt64(cls.rawValue))
         fns.setFlags(query, 0x100000000)
         fns.setPart(query, 0)
-        fns.setPartDomain(query, 0)
 
-        var err: ErrorRef? = nil
         var foundPath: String? = nil
-        var rc: Int32 = 0
-        rc = fns.iterateResultsSync(query) { current in
-            guard let current = current, foundPath == nil else { return }
+        let rc = fns.iterateResultsSync(query) { current in
+            guard let current = current, foundPath == nil else { return true }
             let ident: String? = {
                 guard let p = fns.objectGetIdentifier(current) else { return nil }
                 let s = String(cString: p)
@@ -329,13 +330,16 @@ public final class MCMContainer {
                 if let tokenPtr = fns.copySandboxToken(current) {
                     let token = String(cString: tokenPtr)
                     free(tokenPtr)
-                    fns.sandboxExtensionConsume(token)
+                    let h = fns.sandboxExtensionConsume(token)
+                    _ = h
                 }
                 foundPath = path
+                return false
             }
+            return true
         }
-        if rc != 0 {
-            throw MCMError.queryFailed("iterate rc=\(rc) \(errorText(err ?? fns.getLastError(query)))")
+        if !rc {
+            throw MCMError.queryFailed("iterate denied \(errorText(fns.getLastError(query)))")
         }
         return foundPath
     }
