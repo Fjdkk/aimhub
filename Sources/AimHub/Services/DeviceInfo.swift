@@ -2,12 +2,62 @@ import Foundation
 import Security
 import UIKit
 
+/// Lưu key trên Keychain (survive app reinstall, không bị xoá như UserDefaults).
+public enum KeyStorage {
+    private static let service = "com.aimhub.keystore"
+    private static let account = "activeKey"
+
+    public static func save(_ info: KeyInfo) {
+        guard let data = try? JSONEncoder().encode(info) else { return }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        let status = SecItemAdd(query as CFDictionary, nil)
+        if status == errSecDuplicateItem {
+            let updateQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account
+            ]
+            let attrs: [String: Any] = [kSecValueData as String: data]
+            SecItemUpdate(updateQuery as CFDictionary, attrs as CFDictionary)
+        }
+    }
+
+    public static func load() -> KeyInfo? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return try? JSONDecoder().decode(KeyInfo.self, from: data)
+    }
+
+    public static func clear() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
+
 public enum DeviceInfo {
     private static let service = "com.aimhub.device"
     private static let account = "deviceID"
 
     public static var identifier: String {
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
