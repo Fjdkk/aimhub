@@ -90,7 +90,7 @@ public final class MCMContainer {
             return unsafeBitCast(p, to: T.self)
         }
         func symGlobal<T>(_ name: String) throws -> T {
-            guard let p = dlsym(RTLD_DEFAULT, name) else { throw MCMError.symbolNotFound(name) }
+            guard let p = dlsym(UnsafeMutableRawPointer(bitPattern: -2), name) else { throw MCMError.symbolNotFound(name) }
             return unsafeBitCast(p, to: T.self)
         }
 
