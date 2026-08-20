@@ -53,6 +53,11 @@ public final class MCMContainer {
     private let handle: UnsafeMutableRawPointer?
     private let fns: Fns?
 
+    /// Lease giống MCMActiveLeases của app tham chiếu: giữ object copy đã
+    /// activate SỐNG để sandbox extension không bị thu hồi. Key = "cls:identifier".
+    private var leases: [String: Object] = [:]
+    private let leaseLock = NSLock()
+
     private struct Fns {
         let create: @convention(c) () -> Query?
         let setClass: @convention(c) (Query?, UInt64) -> Void
@@ -137,28 +142,41 @@ public final class MCMContainer {
 
     /// Kích hoạt sandbox extension theo ĐÚNG app tham chiếu (activate: trong
     /// mcm_bridge.m): objectCopy → copySandboxToken (kiểm tra token rỗng) →
-    /// free(token) → objectActivate(copy, false) → objectFree(copy).
+    /// free(token) → objectActivate(copy, false).
     /// Object gốc thuộc query — KHÔNG được free ở đây.
-    private func activateSandboxExtension(on object: Object) throws {
+    /// QUAN TRỌNG: object copy được GIỮ trong lease (không free) — nếu free
+    /// ngay, sandbox extension bị thu hồi và stat/open trên container thất bại
+    /// (lỗi "Operation not permitted" → containerUnavailable).
+    private func activateSandboxExtension(on object: Object, key: String) throws {
         guard let fns = fns else { throw MCMError.dlopenFailed }
         guard let copy = fns.objectCopy(object) else {
             throw MCMError.objectFailed("copy")
         }
-        defer { fns.objectFree(copy) }
 
         guard let tokenPtr = fns.copySandboxToken(copy) else {
+            fns.objectFree(copy)
             throw MCMError.objectFailed("no sandbox token")
         }
         let tokenPresent = tokenPtr.pointee != 0
         free(tokenPtr)
 
         guard tokenPresent else {
+            fns.objectFree(copy)
             throw MCMError.activationFailed(0)
         }
         let ok = fns.sandboxExtensionActivate(copy, false)
         guard ok else {
+            fns.objectFree(copy)
             throw MCMError.activationFailed(errno)
         }
+
+        // Giữ copy sống: thay lease cũ (nếu có) bằng lease mới.
+        leaseLock.lock()
+        if let old = leases[key] {
+            fns.objectFree(old)
+        }
+        leases[key] = copy
+        leaseLock.unlock()
     }
 
     /// Phiên bản AN TOÀN của containerPath: chỉ dùng các symbol MCM đã xác
@@ -199,7 +217,7 @@ public final class MCMContainer {
         let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            try activateSandboxExtension(on: obj)
+            try activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
         }
 
         return path
@@ -240,7 +258,7 @@ public final class MCMContainer {
                 guard let p = fns.objectGetPath(candidate) else { return true }
                 iteratedPath = normalizePath(String(cString: p))
                 if activateExtension {
-                    try? activateSandboxExtension(on: candidate)
+                    try? activateSandboxExtension(on: candidate, key: "\(cls.rawValue):\(id)")
                 }
                 return true
             }
@@ -260,7 +278,7 @@ public final class MCMContainer {
         let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            try activateSandboxExtension(on: obj)
+            try activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
         }
 
         return path
@@ -321,7 +339,7 @@ public final class MCMContainer {
                 return String(cString: p)
             }()
             if ident == bundleID, let path = path {
-                try? activateSandboxExtension(on: current)
+                try? activateSandboxExtension(on: current, key: "\(cls.rawValue):\(bundleID)")
                 foundPath = normalizePath(path)
                 return false
             }
@@ -334,6 +352,14 @@ public final class MCMContainer {
     }
 
     deinit {
+        if let fns = fns {
+            leaseLock.lock()
+            for (_, obj) in leases {
+                fns.objectFree(obj)
+            }
+            leases.removeAll()
+            leaseLock.unlock()
+        }
         if let handle = handle {
             dlclose(handle)
         }
