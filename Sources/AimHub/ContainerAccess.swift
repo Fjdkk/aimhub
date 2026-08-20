@@ -30,56 +30,43 @@ public final class ContainerAccess {
 
     public func gameContainerPath(bundleID: String) throws -> String {
         Self.diag(">>> gameContainerPath cho \(bundleID)")
-
-        // 0) Log host bundle ID thật để đối chiếu với MobileHouseArrest
         let hostID = Bundle.main.bundleIdentifier ?? "nil"
         Self.diag("Host bundleID = \(hostID)")
 
-        // 1) Ưu tiên dataContainerURL từ LSApplicationProxy (kỹ thuật CheatiOS DSW)
-        if let path = AppLauncher.containerPath(bundleID: bundleID), !path.isEmpty {
-            Self.diag("Tầng 1 OK: dataContainerURL = \(path)")
-            return path
-        } else {
-            Self.diag("Tầng 1 FAIL: không lấy được dataContainerURL cho \(bundleID)")
-            Self.diag("App liệt kê được: \(AppLauncher.debugGameApps().joined(separator: ", "))")
-        }
-
-        // 2) Quét trực tiếp /var/mobile/Containers/Data/Application, đọc
-        //    MCMMetadataIdentifier (cách chắc chắn nhất, không cần entitlement)
+        // 1) Quét trực tiếp /var/mobile/Containers/Data/Application bằng POSIX
+        //    (cơ chế chính của app tham chiếu — không cần MCM, không crash).
         if let path = scanContainerPath(bundleID: bundleID) {
-            Self.diag("Tầng 2 OK: scan container = \(path)")
+            Self.diag("Scan OK: \(path)")
             return path
         } else {
-            Self.diag("Tầng 2 FAIL: không tìm thấy container \(bundleID) khi quét")
+            Self.diag("Scan FAIL: không tìm thấy container \(bundleID)")
         }
 
-        // 3) MCM container query theo tên
-        guard let mcm = mcm else {
-            Self.diag("Tầng 3 FAIL: MCM chưa nạp (dlopen thất bại)")
-            throw MCMError.dlopenFailed
+        // 2) dataContainerURL từ LSApplicationProxy
+        if let path = AppLauncher.containerPath(bundleID: bundleID), !path.isEmpty {
+            Self.diag("dataContainerURL OK: \(path)")
+            return path
+        } else {
+            Self.diag("dataContainerURL FAIL: \(AppLauncher.debugGameApps().joined(separator: ", "))")
         }
-        var lastError: Error? = nil
+
+        // 3) MCM query cơ bản (create → set_class → set_identifiers →
+        //    set_part → get_single_result). KHÔNG dùng part_domain /
+        //    iterate_results_sync vì signature không chắc chắn → crash.
+        guard let mcm = mcm else {
+            Self.diag("MCM chưa nạp (dlopen thất bại)")
+            throw ModManagerError.containerUnavailable
+        }
         do {
-            let path = try mcm.containerPath(forBundleID: bundleID, cls: .data, part: 0)
-            Self.diag("Tầng 3 OK: MCM path = \(path)")
+            let path = try mcm.containerPathBasic(forBundleID: bundleID)
+            Self.diag("MCM OK: \(path)")
             return path
         } catch {
-            lastError = error
-            Self.diag("Tầng 3 FAIL: \(error.localizedDescription)")
+            Self.diag("MCM FAIL: \(error.localizedDescription)")
         }
 
-        // 3.5) MCM iterate toàn bộ data container rồi khớp identifier
-        do {
-            if let path = try mcm.containerPathByIterating(forBundleID: bundleID, cls: .data) {
-                Self.diag("Tầng 3.5 OK: iterate khớp = \(path)")
-                return path
-            }
-            Self.diag("Tầng 3.5 FAIL: iterate không khớp container nào")
-        } catch {
-            Self.diag("Tầng 3.5 FAIL: \(error.localizedDescription)")
-        }
-
-        throw lastError ?? MCMError.queryFailed("unknown")
+        Self.diag(">>> Tất cả phương pháp thất bại cho \(bundleID)")
+        throw ModManagerError.containerUnavailable
     }
 
     /// Chẩn đoán host: bundle ID + trạng thái MCM + khả năng quét.
@@ -98,16 +85,13 @@ public final class ContainerAccess {
         out.append("Scan container = \(scan ?? "(nil)")")
         if let mcm = mcm {
             do {
-                if let p = try mcm.containerPathByIterating(forBundleID: bundleID, cls: .data) {
-                    out.append("MCM iterate = \(p)")
-                } else {
-                    out.append("MCM iterate = (không khớp)")
-                }
+                let p = try mcm.containerPathBasic(forBundleID: bundleID)
+                out.append("MCM basic = \(p)")
             } catch {
-                out.append("MCM iterate FAIL: \(error.localizedDescription)")
+                out.append("MCM basic FAIL: \(error.localizedDescription)")
             }
         } else {
-            out.append("MCM iterate = (chưa nạp)")
+            out.append("MCM basic = (chưa nạp)")
         }
         return out
     }

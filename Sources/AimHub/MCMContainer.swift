@@ -125,6 +125,65 @@ public final class MCMContainer {
         return "errno=\(fns.errorGetPosixErrno(e))"
     }
 
+    /// Phiên bản AN TOÀN của containerPath: chỉ dùng các symbol MCM đã xác
+    /// minh ổn định (create → set_class → set_identifiers → set_flags →
+    /// set_part → get_single_result). KHÔNG gọi set_part_domain /
+    /// iterate_results_sync vì signature không chắc chắn → có thể crash.
+    public func containerPathBasic(
+        forBundleID bundleID: String,
+        identifier: String? = nil,
+        cls: MCMContainerClass = .data,
+        part: UInt64 = 0,
+        activateExtension: Bool = true
+    ) throws -> String {
+        guard let fns = fns else { throw MCMError.dlopenFailed }
+
+        guard let query = fns.create() else { throw MCMError.queryFailed("create") }
+        defer { fns.free(query) }
+
+        fns.setClass(query, UInt64(cls.rawValue))
+
+        let ids: CFArray
+        if let identifier = identifier {
+            let arr = [bundleID, identifier] as NSArray
+            ids = arr as CFArray
+        } else {
+            let arr = [bundleID] as NSArray
+            ids = arr as CFArray
+        }
+        fns.setIdentifiers(query, ids)
+        fns.setFlags(query, 0)
+        fns.setPart(query, part)
+
+        var err: ErrorRef? = nil
+        guard let obj = fns.getSingleResult(query, &err) else {
+            throw MCMError.queryFailed(errorText(err ?? fns.getLastError(query)))
+        }
+        defer { fns.objectFree(obj) }
+
+        guard let pathPtr = fns.objectGetPath(obj) else {
+            throw MCMError.objectFailed(errorText(err))
+        }
+        let path = String(cString: pathPtr)
+        free(pathPtr)
+
+        if activateExtension {
+            if let tokenPtr = fns.copySandboxToken(obj) {
+                let token = String(cString: tokenPtr)
+                free(tokenPtr)
+                fns.sandboxExtensionConsume(token)
+            } else {
+                var actErr: ErrorRef? = nil
+                let rc = fns.sandboxExtensionActivate(obj, &actErr)
+                if rc != 0 {
+                    throw MCMError.activationFailed(fns.errorGetPosixErrno(actErr))
+                }
+            }
+        }
+
+        return path
+    }
+
     public func containerPath(
         forBundleID bundleID: String,
         identifier: String? = nil,
