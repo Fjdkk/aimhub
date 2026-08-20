@@ -215,6 +215,55 @@ public final class MCMContainer {
         return token
     }
 
+    /// Quét toàn bộ data container bằng MCM iterate_results_sync rồi khớp
+    /// identifier — phương án dự phòng khi truy vấn theo tên thất bại
+    /// (kỹ thuật của app tham chiếu: container_object_get_identifier).
+    public func containerPathByIterating(
+        forBundleID bundleID: String,
+        cls: MCMContainerClass = .data
+    ) throws -> String? {
+        guard let fns = fns else { throw MCMError.dlopenFailed }
+
+        guard let query = fns.create() else { throw MCMError.queryFailed("create") }
+        defer { fns.free(query) }
+
+        fns.setClass(query, UInt64(cls.rawValue))
+        fns.setFlags(query, 0)
+        fns.setPart(query, 0)
+        fns.setPartDomain(query, 0)
+
+        var err: ErrorRef? = nil
+        var obj = fns.iterateResultsSync(query, &err)
+        while let current = obj {
+            let ident: String? = {
+                guard let p = fns.objectGetIdentifier(current) else { return nil }
+                let s = String(cString: p)
+                free(p)
+                return s
+            }()
+            let path: String? = {
+                guard let p = fns.objectGetPath(current) else { return nil }
+                let s = String(cString: p)
+                free(p)
+                return s
+            }()
+
+            if ident == bundleID, let path = path {
+                // Kích hoạt quyền truy cập container
+                if let tokenPtr = fns.copySandboxToken(current) {
+                    let token = String(cString: tokenPtr)
+                    free(tokenPtr)
+                    fns.sandboxExtensionConsume(token)
+                }
+                fns.objectFree(current)
+                return path
+            }
+            fns.objectFree(current)
+            obj = fns.iterateResultsSync(query, &err)
+        }
+        return nil
+    }
+
     deinit {
         if let handle = handle {
             dlclose(handle)
