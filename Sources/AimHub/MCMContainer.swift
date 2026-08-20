@@ -253,6 +253,7 @@ public final class MCMContainer {
             return path
         }
 
+        guard let obj = obj else { throw MCMError.queryFailed(errorText(fns.getLastError(query))) }
         guard let pathPtr = fns.objectGetPath(obj) else {
             throw MCMError.objectFailed("no path")
         }
