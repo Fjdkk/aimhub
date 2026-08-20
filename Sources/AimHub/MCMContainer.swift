@@ -212,7 +212,7 @@ public final class MCMContainer {
         fns.setPartDomain(query, 0)
 
         var err: ErrorRef? = nil
-        var obj = fns.getSingleResult(query, &err)
+        let obj = fns.getSingleResult(query, &err)
 
         // Fallback: iterate_results_sync giống app tham chiếu. Object chỉ hợp
         // lệnh trong lúc block chạy → phải lấy path + token ngay trong block.

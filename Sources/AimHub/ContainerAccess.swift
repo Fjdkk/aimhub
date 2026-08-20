@@ -148,9 +148,10 @@ public final class ContainerAccess {
             return nil
         }
         var fmt = CFPropertyListFormat.binaryFormat_v1_0
-        guard let plist = CFPropertyListCreateWithData(nil, cfData, CFPropertyListMutabilityOptions.mutableContainersAndLeaves.rawValue, &fmt, nil) else {
+        guard let plistRaw = CFPropertyListCreateWithData(nil, cfData, CFPropertyListMutabilityOptions.mutableContainersAndLeaves.rawValue, &fmt, nil) else {
             return nil
         }
+        let plist = plistRaw.takeRetainedValue()
         guard let dict = plist as? [String: Any] else { return nil }
         return dict["MCMMetadataIdentifier"] as? String
     }
