@@ -52,20 +52,14 @@ struct SettingsView: View {
                 )
                 .padding(.bottom, 10)
 
-                settingsRow("bell.badge", title: L10n.t("settings.notifHistory"), action: { route = .notices })
+                settingsRow("bell.badge",
+                            title: L10n.t("settings.notifHistory"),
+                            action: { route = .notices },
+                            trailing: appState.unreadAnnouncementCount > 0 ? "\(appState.unreadAnnouncementCount)" : nil)
                 settingsRow("wrench.and.screwdriver", title: L10n.t("settings.help"), action: { route = .help })
                 settingsRow("list.bullet", title: L10n.t("settings.log"), action: { route = .log })
                 settingsRow("globe", title: L10n.t("settings.language"), action: { route = .lang })
                 settingsRow("info.circle", title: L10n.t("settings.about"), action: { route = .about })
-
-                if appState.activeGame != nil {
-                    settingsRow("stethoscope", title: L10n.t("settings.diag"), action: {
-                        if let game = appState.activeGame {
-                            appState.diagnoseContainer(for: game)
-                            route = .log
-                        }
-                    })
-                }
 
                 Button {
                     if let url = URL(string: "https://zalo.me/0336898934") {
@@ -118,7 +112,9 @@ struct SettingsView: View {
         }
     }
 
-    private func settingsRow(_ icon: String, title: String, action: @escaping () -> Void) -> some View {
+    private func settingsRow(_ icon: String, title: String,
+                            action: @escaping () -> Void,
+                            trailing: String? = nil) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -129,6 +125,15 @@ struct SettingsView: View {
                     .font(.system(size: 15))
                     .foregroundColor(Theme.text)
                 Spacer()
+                if let trailing = trailing {
+                    Text(trailing)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background(Theme.accent)
+                        .cornerRadius(10)
+                }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Theme.muted)

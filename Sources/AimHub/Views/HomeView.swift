@@ -174,31 +174,49 @@ struct HomeView: View {
     }
 
     private var noticeBanner: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(Theme.orange)
-                .frame(width: 9, height: 9)
-                .shadow(color: Theme.orange.opacity(0.8), radius: 4)
-            if let ann = appState.announcements.first {
-                Text(ann.date ?? "")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Theme.muted)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Theme.card2)
-                    .cornerRadius(6)
-                Text(ann.title)
-                    .font(.system(size: 14))
-                    .foregroundColor(Theme.text)
-                    .lineLimit(1)
-            } else {
-                Text(L10n.t("home.noNotice"))
-                    .font(.system(size: 14))
-                    .foregroundColor(Theme.text)
+        Button {
+            appState.openNoticesRequest = true
+        } label: {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(appState.unreadAnnouncementCount > 0 ? Theme.accent : Theme.orange)
+                    .frame(width: 9, height: 9)
+                    .shadow(color: (appState.unreadAnnouncementCount > 0 ? Theme.accent : Theme.orange).opacity(0.8), radius: 4)
+                if let ann = appState.announcements.first {
+                    Text(ann.date ?? "")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Theme.muted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Theme.card2)
+                        .cornerRadius(6)
+                    Text(ann.title)
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.text)
+                        .lineLimit(1)
+                } else {
+                    Text(L10n.t("home.noNotice"))
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.text)
+                }
+                Spacer()
+                if appState.unreadAnnouncementCount > 0 {
+                    Text("\(appState.unreadAnnouncementCount)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Theme.gradient())
+                        .clipShape(Capsule())
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Theme.muted)
+                }
             }
-            Spacer()
+            .card(padding: 14)
         }
-        .card(padding: 14)
+        .buttonStyle(.plain)
     }
 
     private var statsCard: some View {

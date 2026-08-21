@@ -173,12 +173,18 @@ public final class ModManager {
         return (joined as NSString).standardizingPath
     }
 
-    private func registry() -> [String] {
-        UserDefaults.standard.stringArray(forKey: registryKey) ?? []
+    /// Registry backup theo bundleID để mỗi game quản lý backup riêng,
+    /// tránh bật mod game này ảnh hưởng/lẫn sang game kia.
+    private func registryKey(for bundleID: String) -> String {
+        "aimhub.backup.registry.\(bundleID)"
     }
 
-    private func saveRegistry(_ list: [String]) {
-        UserDefaults.standard.set(list, forKey: registryKey)
+    private func registry(for bundleID: String) -> [String] {
+        UserDefaults.standard.stringArray(forKey: registryKey(for: bundleID)) ?? []
+    }
+
+    private func saveRegistry(_ list: [String], for bundleID: String) {
+        UserDefaults.standard.set(list, forKey: registryKey(for: bundleID))
     }
 
     public func hasBackup(relativePath: String) -> Bool {
@@ -186,7 +192,7 @@ public final class ModManager {
         return POSIXFile.exists(abs + backupExtension)
     }
 
-    public func backupFile(relativePath: String) throws {
+    public func backupFile(relativePath: String, bundleID: String) throws {
         let abs = try absolute(relativePath)
         guard POSIXFile.exists(abs) else {
             throw ModManagerError.ioFailed("Không tồn tại: \(relativePath)")
@@ -200,17 +206,17 @@ public final class ModManager {
                 throw ModManagerError.ioFailed(error.localizedDescription)
             }
         }
-        var list = registry()
+        var list = registry(for: bundleID)
         if !list.contains(backupPath) {
             list.append(backupPath)
-            saveRegistry(list)
+            saveRegistry(list, for: bundleID)
         }
     }
 
     public func installMod(_ mod: ModEntry, bundleID: String) throws {
         _ = try prepareContainer(bundleID: bundleID)
         for file in mod.files {
-            try backupFile(relativePath: file.relativePath)
+            try backupFile(relativePath: file.relativePath, bundleID: bundleID)
             let abs = try absolute(file.relativePath)
             try writeFile(data: file.data, to: abs)
         }
@@ -232,7 +238,7 @@ public final class ModManager {
 
     public func restoreAll(bundleID: String) throws {
         _ = try prepareContainer(bundleID: bundleID)
-        let list = registry()
+        let list = registry(for: bundleID)
         var restored = 0
         for backupPath in list {
             let origPath = String(backupPath.dropLast(backupExtension.count))
@@ -245,7 +251,7 @@ public final class ModManager {
                 throw ModManagerError.ioFailed(error.localizedDescription)
             }
         }
-        saveRegistry([])
+        saveRegistry([], for: bundleID)
         _ = restored
     }
 

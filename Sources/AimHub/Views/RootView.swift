@@ -34,8 +34,10 @@ struct RootView: View {
             appState.start()
             Task {
                 await appState.loadGames()
-                await appState.loadAnnouncements()
             }
+        }
+        .sheet(isPresented: $appState.openNoticesRequest) {
+            NoticesView()
         }
     }
 
@@ -73,8 +75,13 @@ struct RootView: View {
             selectedTab = tab
         } label: {
             VStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
+                if tab == .patch {
+                    PatchTabIcon(isActive: selectedTab == tab)
+                        .frame(width: 20, height: 20)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                }
                 Text(label)
                     .font(.system(size: 10, weight: .medium))
                 Rectangle()

@@ -122,10 +122,24 @@ public struct VersionInfo: Codable, Hashable {
     }
 }
 
+public enum LogLevel: String, Codable, Hashable {
+    case info = "INFO"
+    case success = "SUCCESS"
+    case warning = "WARNING"
+    case error = "ERROR"
+}
+
 public struct LogEntry: Identifiable, Hashable {
     public let id = UUID()
     public let time: Date
     public let message: String
+    public let level: LogLevel
+
+    public init(time: Date, message: String, level: LogLevel = .info) {
+        self.time = time
+        self.message = message
+        self.level = level
+    }
 }
 
 public enum Language: String, Codable {

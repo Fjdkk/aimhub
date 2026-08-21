@@ -24,13 +24,14 @@ struct KeyView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Logo
+                // Logo + hiệu ứng ánh sáng kính lướt ngang theo chu kỳ
                 Image("Logo")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 88, height: 88)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
                     .shadow(color: .black.opacity(0.45), radius: 6, y: 3)
+                    .lightSweep(duration: 3.8, pause: 2.2, intensity: 0.38)
                 .scaleEffect(appear ? 1 : 0.6)
                 .opacity(appear ? 1 : 0)
                 .padding(.bottom, 22)
@@ -128,6 +129,7 @@ struct KeyView: View {
                     }
                 }
                 .primaryButton()
+                .buttonStyle(PressableButtonStyle(scale: 0.96))
                 .disabled(loading)
                 .padding(.horizontal, 24)
                 .scaleEffect(loading ? 0.97 : 1)

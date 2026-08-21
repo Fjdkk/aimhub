@@ -115,30 +115,14 @@ struct NoticesView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(appState.announcements.enumerated()), id: \.element.id) { index, ann in
-                            HStack(alignment: .top, spacing: 10) {
-                                if let date = ann.date {
-                                    Text(date)
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundColor(Theme.muted)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 3)
-                                        .background(Theme.card2)
-                                        .cornerRadius(6)
-                                        .padding(.top, 1)
+                            noticeRow(ann)
+                                .overlay(alignment: .bottom) {
+                                    if index < appState.announcements.count - 1 {
+                                        Rectangle()
+                                            .fill(Theme.border)
+                                            .frame(height: 0.5)
+                                    }
                                 }
-                                Text(ann.title)
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(Theme.text)
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.vertical, 12)
-                            .overlay(alignment: .bottom) {
-                                if index < appState.announcements.count - 1 {
-                                    Rectangle()
-                                        .fill(Theme.border)
-                                        .frame(height: 0.5)
-                                }
-                            }
                         }
                         if appState.announcements.isEmpty {
                             Text(L10n.t("sub.noNotices"))
@@ -154,6 +138,50 @@ struct NoticesView: View {
                 }
             }
         }
+        .onAppear {
+            // Mở màn hình là đánh dấu toàn bộ đã đọc
+            appState.markAllAnnouncementsRead()
+        }
+    }
+
+    private func noticeRow(_ ann: Announcement) -> some View {
+        let isUnread = !NotificationManager.shared.readAnnouncementIds.contains(ann.id)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 10) {
+                // Chấm xanh báo chưa đọc
+                Circle()
+                    .fill(isUnread ? Theme.accent : Color.clear)
+                    .frame(width: 8, height: 8)
+                    .padding(.top, 5)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ann.title)
+                        .font(.system(size: 14, weight: isUnread ? .bold : .semibold))
+                        .foregroundColor(Theme.text)
+
+                    if let content = ann.content, !content.isEmpty {
+                        Text(content)
+                            .font(.system(size: 13))
+                            .foregroundColor(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if let date = ann.date {
+                    Text(date)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Theme.muted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Theme.card2)
+                        .cornerRadius(6)
+                }
+            }
+        }
+        .padding(.vertical, 12)
     }
 }
 
@@ -265,12 +293,20 @@ struct LogView: View {
                         ForEach(appState.sessionLog) { entry in
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
                                 Text(timeString(entry.time))
-                                    .font(.system(size: 13))
+                                    .font(.system(size: 12))
                                     .foregroundColor(Theme.muted)
                                     .monospacedDigit()
+
+                                Image(systemName: iconName(entry.level))
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(color(entry.level))
+                                    .frame(width: 16)
+
                                 Text(entry.message)
                                     .font(.system(size: 13))
                                     .foregroundColor(Theme.text)
+                                    .fixedSize(horizontal: false, vertical: true)
+
                                 Spacer()
                             }
                             .padding(.vertical, 9)
@@ -300,6 +336,24 @@ struct LogView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         return formatter.string(from: date)
+    }
+
+    private func color(_ level: LogLevel) -> Color {
+        switch level {
+        case .info: return Theme.accent
+        case .success: return Theme.green
+        case .warning: return Theme.orange
+        case .error: return Theme.red
+        }
+    }
+
+    private func iconName(_ level: LogLevel) -> String {
+        switch level {
+        case .info: return "info.circle.fill"
+        case .success: return "checkmark.circle.fill"
+        case .warning: return "exclamationmark.triangle.fill"
+        case .error: return "xmark.octagon.fill"
+        }
     }
 }
 

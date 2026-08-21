@@ -10,6 +10,9 @@ final class AppState: ObservableObject {
     @Published var forceUpdate: Bool = false
     @Published var isConnected = false
     @Published var announcements: [Announcement] = []
+    @Published var unreadAnnouncementCount = 0
+    /// Binding với sheet Lịch sử thông báo: true khi user bấm push notification.
+    @Published var openNoticesRequest = false
     @Published var versionInfo: VersionInfo?
     @Published var sessionLog: [LogEntry] = []
     @Published var language: Language {
@@ -23,17 +26,23 @@ final class AppState: ObservableObject {
     @Published var appFPS: Int = 0
     @Published var connectedSince: Date?
     @Published var notificationsEnabled: Bool {
-        didSet { UserDefaults.standard.set(notificationsEnabled, forKey: notificationsKey) }
+        didSet {
+            UserDefaults.standard.set(notificationsEnabled, forKey: notificationsKey)
+            NotificationManager.shared.isEnabled = notificationsEnabled
+        }
     }
 
     private let server = ServerClient.shared
     private var started = false
-    private let activeModKey = "aimhub.activeModID"
     private let lastActiveKey = "aimhub.session.lastActiveAt"
     private let notificationsKey = "aimhub.notificationsEnabled"
     private let languageKey = "aimhub.language"
     private var heartbeatTask: Task<Void, Never>?
+    private var announcementPollTask: Task<Void, Never>?
     private var displayLink: CADisplayLink?
+    /// Lưu id thông báo đã xử lý push trong phiên này để không push lại.
+    private var pushedAnnouncementIds: Set<String> = []
+    private var notificationTapToken: NSObjectProtocol?
 
     init() {
         notificationsEnabled = UserDefaults.standard.bool(forKey: notificationsKey)
@@ -69,15 +78,15 @@ final class AppState: ObservableObject {
             }
         }
         activeKey = KeyStorage.load()
-        activeModID = UserDefaults.standard.string(forKey: activeModKey)
+        NotificationManager.shared.configure()
         checkVersion()
-        if activeModID != nil {
-            log("Khôi phục trạng thái: mod đang bật")
-        }
         if activeKey != nil {
             checkBackgroundGap()
             startHeartbeat()
         }
+        observeNotificationTap()
+        Task { await loadAnnouncements() }
+        startAnnouncementPolling()
     }
 
     func activateKey(_ key: String) async throws {
@@ -86,7 +95,7 @@ final class AppState: ObservableObject {
         activeKey = info
         KeyStorage.save(info)
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastActiveKey)
-        log("Kích hoạt key thành công")
+        log("Kích hoạt key thành công", level: .success)
     }
 
     func clearKey() {
@@ -109,7 +118,7 @@ final class AppState: ObservableObject {
                     checkBackgroundGap()
                 }
             } catch {
-                log("Kiểm tra phiên bản thất bại")
+                log("Kiểm tra phiên bản thất bại", level: .warning)
             }
         }
     }
@@ -119,14 +128,14 @@ final class AppState: ObservableObject {
             games = try await server.fetchGames()
             isConnected = true
             if connectedSince == nil { connectedSince = Date() }
-            log("Kết nối máy chủ thành công")
+            log("Kết nối máy chủ thành công", level: .success)
             if let saved = UserDefaults.standard.string(forKey: "activeBundleID") {
                 activeGame = games.first(where: { $0.bundleID == saved })
             }
             await measurePing()
         } catch {
             isConnected = false
-            log("Lỗi kết nối máy chủ")
+            log("Lỗi kết nối máy chủ", level: .error)
         }
     }
 
@@ -143,13 +152,15 @@ final class AppState: ObservableObject {
     func selectGame(_ game: Game?) {
         if game?.bundleID != activeGame?.bundleID, activeModID != nil {
             try? ModManager.shared.restoreAll(bundleID: activeGame?.bundleID ?? "")
-            setActiveMod(nil)
+            setActiveMod(nil, for: activeGame?.bundleID)
             log("Đã khôi phục file gốc khi đổi game")
         }
         activeGame = game
         if let g = game {
             UserDefaults.standard.set(g.bundleID, forKey: "activeBundleID")
+            activeModID = UserDefaults.standard.string(forKey: activeModKey(for: g.bundleID))
         } else {
+            activeModID = nil
             UserDefaults.standard.removeObject(forKey: "activeBundleID")
         }
     }
@@ -160,7 +171,7 @@ final class AppState: ObservableObject {
             try ModManager.shared.restoreAll(bundleID: game.bundleID)
         }
         try ModManager.shared.installMod(mod, bundleID: game.bundleID)
-        setActiveMod(mod.id)
+        setActiveMod(mod.id, for: game.bundleID)
         log("Đã bật \(mod.displayName)")
     }
 
@@ -174,16 +185,21 @@ final class AppState: ObservableObject {
     func restoreAll() async throws {
         guard let game = activeGame else { throw ModManagerError.containerUnavailable }
         try ModManager.shared.restoreAll(bundleID: game.bundleID)
-        setActiveMod(nil)
+        setActiveMod(nil, for: game.bundleID)
         log("Đã khôi phục file gốc")
     }
 
-    private func setActiveMod(_ id: String?) {
+    private func activeModKey(for bundleID: String) -> String {
+        "aimhub.activeModID.\(bundleID)"
+    }
+
+    private func setActiveMod(_ id: String?, for bundleID: String?) {
         activeModID = id
+        guard let bundleID = bundleID else { return }
         if let id = id {
-            UserDefaults.standard.set(id, forKey: activeModKey)
+            UserDefaults.standard.set(id, forKey: activeModKey(for: bundleID))
         } else {
-            UserDefaults.standard.removeObject(forKey: activeModKey)
+            UserDefaults.standard.removeObject(forKey: activeModKey(for: bundleID))
         }
     }
 
@@ -220,10 +236,14 @@ final class AppState: ObservableObject {
         guard activeKey != nil else { return }
         checkBackgroundGap()
         startHeartbeat()
+        // Vào lại app -> kéo thông báo mới ngay lập tức + bật lại polling
+        Task { await loadAnnouncements() }
+        startAnnouncementPolling()
     }
 
     func sceneDidEnterBackground() {
         stopHeartbeat()
+        stopAnnouncementPolling()
     }
 
     private func startHeartbeat() {
@@ -264,7 +284,7 @@ final class AppState: ObservableObject {
             ?? UserDefaults.standard.string(forKey: "activeBundleID")
         if let bundleID = bundleID, activeModID != nil {
             try? ModManager.shared.restoreAll(bundleID: bundleID)
-            setActiveMod(nil)
+            setActiveMod(nil, for: bundleID)
             log("Đã khôi phục file gốc khi hết phiên")
         }
         activeGame = nil
@@ -274,8 +294,8 @@ final class AppState: ObservableObject {
         stopHeartbeat()
     }
 
-    func log(_ message: String) {
-        let entry = LogEntry(time: Date(), message: message)
+    func log(_ message: String, level: LogLevel = .info) {
+        let entry = LogEntry(time: Date(), message: message, level: level)
         sessionLog.insert(entry, at: 0)
         if sessionLog.count > 200 {
             sessionLog.removeLast(sessionLog.count - 200)
@@ -286,17 +306,84 @@ final class AppState: ObservableObject {
         sessionLog.removeAll()
     }
 
+    // MARK: - Thông báo từ Web Admin (poll + push realtime)
+
+    /// Kéo thông báo từ server, tự động phát push banner cho bài MỚI
+    /// (chưa từng thấy kể từ lần cài app) và cập nhật badge chưa đọc.
     func loadAnnouncements() async {
         do {
-            announcements = try await server.fetchAnnouncements()
+            let list = try await server.fetchAnnouncements()
+            let readIds = NotificationManager.shared.readAnnouncementIds
+            let isFirstFetch = announcements.isEmpty && pushedAnnouncementIds.isEmpty
+
+            // Push banner cho các thông báo mới (bỏ qua lần fetch đầu để
+            // không spam lại toàn bộ lịch sử khi user cài lại app)
+            if !isFirstFetch {
+                for ann in list where !pushedAnnouncementIds.contains(ann.id)
+                    && !readIds.contains(ann.id) {
+                    NotificationManager.shared.showNewAnnouncement(
+                        id: ann.id, title: ann.title, content: ann.content)
+                    pushedAnnouncementIds.insert(ann.id)
+                    log("Thông báo mới: \(ann.title)", level: .success)
+                }
+            }
+
+            announcements = list
+            pushedAnnouncementIds.formUnion(list.map(\.id))
+            updateUnreadCount()
         } catch {
-            log("Không tải được thông báo")
+            log("Không tải được thông báo", level: .warning)
+        }
+    }
+
+    /// Số thông báo chưa đọc (dựa trên danh sách đã đọc lưu persistent).
+    func updateUnreadCount() {
+        let readIds = NotificationManager.shared.readAnnouncementIds
+        unreadAnnouncementCount = announcements.filter { !readIds.contains($0.id) }.count
+        NotificationManager.shared.updateBadgeCount(unreadAnnouncementCount)
+    }
+
+    /// Đánh dấu tất cả thông báo là đã đọc (gọi khi mở màn Lịch sử thông báo).
+    func markAllAnnouncementsRead() {
+        NotificationManager.shared.markAnnouncementsRead(announcements.map(\.id))
+        updateUnreadCount()
+    }
+
+    /// Polling nhẹ mỗi 5 phút khi app đang mở — đủ nhanh để nhận thông báo
+    /// Admin vừa đăng mà không dội server liên tục.
+    private func startAnnouncementPolling() {
+        guard announcementPollTask == nil else { return }
+        announcementPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 300_000_000_000)
+                guard !Task.isCancelled else { return }
+                await self?.loadAnnouncements()
+            }
+        }
+    }
+
+    private func stopAnnouncementPolling() {
+        announcementPollTask?.cancel()
+        announcementPollTask = nil
+    }
+
+    /// User bấm vào push notification -> mở sheet Lịch sử thông báo.
+    private func observeNotificationTap() {
+        guard notificationTapToken == nil else { return }
+        notificationTapToken = NotificationCenter.default.addObserver(
+            forName: .aimhubOpenNotices, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.openNoticesRequest = true
         }
     }
 
     deinit {
         displayLink?.invalidate()
         heartbeatTask?.cancel()
+        announcementPollTask?.cancel()
+        if let token = notificationTapToken {
+            NotificationCenter.default.removeObserver(token)
+        }
     }
 }
 
