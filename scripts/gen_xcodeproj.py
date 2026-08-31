@@ -224,6 +224,7 @@ def add_build_config(cid, name, project_level):
         pbx.append(f"\t\t\t\tSWIFT_VERSION = 5.0;")
     else:
         pbx.append(f"\t\t\t\tCODE_SIGN_STYLE = Automatic;")
+        pbx.append(f"\t\t\t\tCODE_SIGN_ENTITLEMENTS = Sources/AimHub/AimHub.entitlements;")
         pbx.append(f"\t\t\t\tCURRENT_PROJECT_VERSION = 1;")
         pbx.append(f"\t\t\t\tINFOPLIST_FILE = Sources/AimHub/Info.plist;")
         pbx.append(f"\t\t\t\tLD_RUNPATH_SEARCH_PATHS = (")

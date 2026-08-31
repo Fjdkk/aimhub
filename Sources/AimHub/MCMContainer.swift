@@ -83,16 +83,35 @@ public final class MCMContainer {
     }
 
     public init() throws {
-        guard let h = dlopen("/usr/lib/system/libsystem_containermanager.dylib", RTLD_LAZY) else {
+        // iOS 18+ đổi vị trí dylib -> thử nhiều path, log dlerror để chẩn đoán
+        let candidates = [
+            "/usr/lib/system/libsystem_containermanager.dylib",
+            "/System/Library/PrivateFrameworks/MobileContainerManager.framework/MobileContainerManager",
+            "/usr/lib/libMobileContainerManager.dylib"
+        ]
+        var h: UnsafeMutableRawPointer? = nil
+        var lastErr = ""
+        for p in candidates {
+            if let hh = dlopen(p, RTLD_LAZY) { h = hh; break }
+            if let e = dlerror() { lastErr = String(cString: e) }
+        }
+        guard let handleUnwrapped = h else {
+            ContainerAccess.diag("MCM dlopen fail: \(lastErr)")
             throw MCMError.dlopenFailed
         }
-        handle = h
+        let hUnwrapped = handleUnwrapped
+        handle = hUnwrapped
 
         func sym<T>(_ name: String) throws -> T {
-            guard let p = dlsym(h, name) else { throw MCMError.symbolNotFound(name) }
+            guard let p = dlsym(hUnwrapped, name) else { throw MCMError.symbolNotFound(name) }
             return unsafeBitCast(p, to: T.self)
         }
+        // xpc_* nằm trong libxpc riêng trên iOS 18, không dùng RTLD_DEFAULT
+        let xpcHandle: UnsafeMutableRawPointer? = dlopen("/usr/lib/system/libxpc.dylib", RTLD_LAZY)
         func symGlobal<T>(_ name: String) throws -> T {
+            if let xh = xpcHandle, let p = dlsym(xh, name) {
+                return unsafeBitCast(p, to: T.self)
+            }
             guard let p = dlsym(UnsafeMutableRawPointer(bitPattern: -2), name) else { throw MCMError.symbolNotFound(name) }
             return unsafeBitCast(p, to: T.self)
         }
