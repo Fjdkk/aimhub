@@ -180,7 +180,7 @@ struct ModListView: View {
     }
 
     private func modRow(_ rule: RuleDetail) -> some View {
-        let isOn = appState.activeModID == rule.ruleID
+        let isOn = appState.isModActive(ruleID: rule.ruleID)
         let busy = busyModID == rule.ruleID
 
         return HStack {
@@ -249,10 +249,11 @@ struct ModListView: View {
         guard let game = appState.activeGame else { return }
         busyModID = rule.ruleID
         errorText = nil
-if appState.activeModID == rule.ruleID {
+
+        if appState.isModActive(ruleID: rule.ruleID) {
             Task {
                 do {
-                    try await appState.restoreAll()
+                    try await appState.turnOffMod(rule)
                     busyModID = nil
                     showToast(String(format: L10n.t("mod.off"), rule.name))
                 } catch {
@@ -266,7 +267,7 @@ if appState.activeModID == rule.ruleID {
         Task {
             do {
                 let modEntry = try await buildModEntry(rule, game: game)
-                try await appState.installMod(modEntry)
+                try await appState.installMod(modEntry, rule: rule)
                 busyModID = nil
                 showToast(String(format: L10n.t("mod.on"), rule.name))
             } catch {

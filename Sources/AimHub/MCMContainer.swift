@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 
-public enum MCMError: Error, CustomStringConvertible {
+public enum MCMError: Error, LocalizedError, CustomStringConvertible {
     case dlopenFailed
     case symbolNotFound(String)
     case queryFailed(String)

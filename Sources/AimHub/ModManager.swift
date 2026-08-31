@@ -27,20 +27,24 @@ public struct ModEntry {
     }
 }
 
-public enum ModManagerError: Error, CustomStringConvertible {
+public enum ModManagerError: Error, LocalizedError, CustomStringConvertible {
     case containerUnavailable
     case noBackup
     case ioFailed(String)
 
-    public var description: String {
+    public var errorDescription: String? {
         switch self {
         case .containerUnavailable:
-            return "Không truy cập được container trò chơi"
+            return L10n.t("err.containerUnavailable")
         case .noBackup:
-            return "Không tìm thấy bản backup"
+            return L10n.t("err.noBackup")
         case .ioFailed(let m):
-            return "Lỗi ghi file: \(m)"
+            return "\(L10n.t("err.ioFailed")): \(m)"
         }
+    }
+
+    public var description: String {
+        errorDescription ?? "Lỗi container trò chơi"
     }
 }
 
@@ -48,13 +52,14 @@ public enum ModManagerError: Error, CustomStringConvertible {
 /// Foundation/FileManager tự kiểm tra sandbox theo bundle ID hiện tại và
 /// có thể chặn truy cập container của app khác dù sandbox extension đã được
 /// consume. POSIX nói chuyện thẳng với kernel, chỉ kiểm tra extension đã consume.
-enum POSIXFileError: Error, CustomStringConvertible {
+enum POSIXFileError: Error, LocalizedError, CustomStringConvertible {
     case io(String)
     var description: String {
         switch self {
         case .io(let m): return m
         }
     }
+    var errorDescription: String? { description }
 }
 
 enum POSIXFile {
@@ -219,6 +224,24 @@ public final class ModManager {
             try backupFile(relativePath: file.relativePath, bundleID: bundleID)
             let abs = try absolute(file.relativePath)
             try writeFile(data: file.data, to: abs)
+        }
+    }
+
+    public func restoreFile(relativePath: String, bundleID: String) throws {
+        _ = try prepareContainer(bundleID: bundleID)
+        let abs = try absolute(relativePath)
+        let backupPath = abs + backupExtension
+        guard POSIXFile.exists(backupPath) else { return }
+        do {
+            if POSIXFile.exists(abs) {
+                try POSIXFile.remove(abs)
+            }
+            try POSIXFile.move(from: backupPath, to: abs)
+            var list = registry(for: bundleID)
+            list.removeAll(where: { $0 == backupPath })
+            saveRegistry(list, for: bundleID)
+        } catch {
+            throw ModManagerError.ioFailed(error.localizedDescription)
         }
     }
 

@@ -2,11 +2,40 @@ import Foundation
 import SwiftUI
 import UIKit
 
+public struct ActiveModItem: Codable, Equatable, Hashable {
+    public let ruleID: String
+    public let name: String
+    public let destination: String
+
+    public init(ruleID: String, name: String, destination: String) {
+        self.ruleID = ruleID
+        self.name = name
+        self.destination = destination
+    }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     @Published var activeKey: KeyInfo?
     @Published var activeGame: Game?
-    @Published var activeModID: String?
+    @Published var activeMods: [String: ActiveModItem] = [:] // key: destination path
+
+    var activeModID: String? {
+        activeMods.values.first?.ruleID
+    }
+
+    var activeModNames: [String] {
+        activeMods.values.map { $0.name }
+    }
+
+    func isModActive(ruleID: String) -> Bool {
+        activeMods.values.contains(where: { $0.ruleID == ruleID })
+    }
+
+    func activeMod(forDestination destination: String) -> ActiveModItem? {
+        activeMods[destination]
+    }
+
     @Published var forceUpdate: Bool = false
     @Published var isConnected = false
     @Published var announcements: [Announcement] = []
@@ -150,29 +179,47 @@ final class AppState: ObservableObject {
     }
 
     func selectGame(_ game: Game?) {
-        if game?.bundleID != activeGame?.bundleID, activeModID != nil {
+        if game?.bundleID != activeGame?.bundleID, !activeMods.isEmpty {
             try? ModManager.shared.restoreAll(bundleID: activeGame?.bundleID ?? "")
-            setActiveMod(nil, for: activeGame?.bundleID)
+            saveActiveMods([:], for: activeGame?.bundleID ?? "")
             log("Đã khôi phục file gốc khi đổi game")
         }
         activeGame = game
         if let g = game {
             UserDefaults.standard.set(g.bundleID, forKey: "activeBundleID")
-            activeModID = UserDefaults.standard.string(forKey: activeModKey(for: g.bundleID))
+            loadActiveMods(for: g.bundleID)
         } else {
-            activeModID = nil
+            activeMods = [:]
             UserDefaults.standard.removeObject(forKey: "activeBundleID")
         }
     }
 
-    func installMod(_ mod: ModEntry) async throws {
+    func installMod(_ mod: ModEntry, rule: RuleDetail) async throws {
         guard let game = activeGame else { throw ModManagerError.containerUnavailable }
-        if activeModID != nil, activeModID != mod.id {
-            try ModManager.shared.restoreAll(bundleID: game.bundleID)
+        let dest = rule.destination ?? mod.files.first?.relativePath ?? "Documents/\(rule.ruleID).bin"
+        
+        // Nếu cùng file destination đang có mod khác bật (vd: đang bật Aim Body mà bấm Aim Neck)
+        // -> Khôi phục file gốc của destination đó trước
+        if let existing = activeMods[dest], existing.ruleID != rule.ruleID {
+            try? ModManager.shared.restoreFile(relativePath: dest, bundleID: game.bundleID)
+            log("Tự động tắt \(existing.name) do cùng can thiệp file")
         }
+
         try ModManager.shared.installMod(mod, bundleID: game.bundleID)
-        setActiveMod(mod.id, for: game.bundleID)
-        log("Đã bật \(mod.displayName)")
+        var current = activeMods
+        current[dest] = ActiveModItem(ruleID: rule.ruleID, name: rule.name, destination: dest)
+        saveActiveMods(current, for: game.bundleID)
+        log("Đã bật \(rule.name)")
+    }
+
+    func turnOffMod(_ rule: RuleDetail) async throws {
+        guard let game = activeGame else { throw ModManagerError.containerUnavailable }
+        let dest = rule.destination ?? "Documents/\(rule.ruleID).bin"
+        try ModManager.shared.restoreFile(relativePath: dest, bundleID: game.bundleID)
+        var current = activeMods
+        current.removeValue(forKey: dest)
+        saveActiveMods(current, for: game.bundleID)
+        log("Đã tắt \(rule.name)")
     }
 
     func diagnoseContainer(for game: Game) {
@@ -185,21 +232,29 @@ final class AppState: ObservableObject {
     func restoreAll() async throws {
         guard let game = activeGame else { throw ModManagerError.containerUnavailable }
         try ModManager.shared.restoreAll(bundleID: game.bundleID)
-        setActiveMod(nil, for: game.bundleID)
-        log("Đã khôi phục file gốc")
+        saveActiveMods([:], for: game.bundleID)
+        log("Đã khôi phục toàn bộ file gốc")
     }
 
-    private func activeModKey(for bundleID: String) -> String {
-        "aimhub.activeModID.\(bundleID)"
+    private func activeModsKey(for bundleID: String) -> String {
+        "aimhub.activeMods.\(bundleID)"
     }
 
-    private func setActiveMod(_ id: String?, for bundleID: String?) {
-        activeModID = id
-        guard let bundleID = bundleID else { return }
-        if let id = id {
-            UserDefaults.standard.set(id, forKey: activeModKey(for: bundleID))
+    private func loadActiveMods(for bundleID: String) {
+        if let data = UserDefaults.standard.data(forKey: activeModsKey(for: bundleID)),
+           let dict = try? JSONDecoder().decode([String: ActiveModItem].self, from: data) {
+            activeMods = dict
         } else {
-            UserDefaults.standard.removeObject(forKey: activeModKey(for: bundleID))
+            activeMods = [:]
+        }
+    }
+
+    private func saveActiveMods(_ mods: [String: ActiveModItem], for bundleID: String) {
+        activeMods = mods
+        if let data = try? JSONEncoder().encode(mods) {
+            UserDefaults.standard.set(data, forKey: activeModsKey(for: bundleID))
+        } else {
+            UserDefaults.standard.removeObject(forKey: activeModsKey(for: bundleID))
         }
     }
 
@@ -282,9 +337,9 @@ final class AppState: ObservableObject {
         log("Phiên hoạt động đã hết hạn")
         let bundleID = activeGame?.bundleID
             ?? UserDefaults.standard.string(forKey: "activeBundleID")
-        if let bundleID = bundleID, activeModID != nil {
+        if let bundleID = bundleID, !activeMods.isEmpty {
             try? ModManager.shared.restoreAll(bundleID: bundleID)
-            setActiveMod(nil, for: bundleID)
+            saveActiveMods([:], for: bundleID)
             log("Đã khôi phục file gốc khi hết phiên")
         }
         activeGame = nil

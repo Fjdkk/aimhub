@@ -433,11 +433,11 @@ struct AboutView: View {
                         VStack(spacing: 0) {
                             kv(L10n.t("sub.currentVersion"), versionString)
                             kv(L10n.t("sub.verify"), L10n.t("sub.latest"), color: Theme.green)
-                            kv(L10n.t("sub.iosSupport"), L10n.t("sub.supported"), color: Theme.green)
+                            kv(L10n.t("sub.iosSupport"), iosSupportStatus.text, color: iosSupportStatus.color)
                             HStack {
                                 Text(L10n.t("sub.verifiedRange")).foregroundColor(Theme.muted)
                                 Spacer()
-                                Text(iosRange)
+                                Text(iosRange.isEmpty ? L10n.t("sub.supported") : iosRange)
                                     .font(.system(size: 12))
                                     .foregroundColor(Theme.muted)
                                     .multilineTextAlignment(.trailing)
@@ -480,6 +480,45 @@ struct AboutView: View {
     private var iosRange: String {
         let list = appState.versionInfo?.iosSupported ?? []
         return list.joined(separator: "\n")
+    }
+
+    private var iosSupportStatus: (text: String, color: Color) {
+        // 1. Kiểm tra nạp thư viện Sandbox Container hệ thống
+        guard ContainerAccess.shared.isAvailable else {
+            return (L10n.t("sub.sandboxRestricted"), Theme.red)
+        }
+
+        // 2. Kiểm tra dải phiên bản iOS từ Server (nếu có cấu hình trên Admin)
+        let list = appState.versionInfo?.iosSupported ?? []
+        if list.isEmpty {
+            return (L10n.t("sub.supported"), Theme.green)
+        }
+
+        let currentVer = DeviceInfo.osVersion
+        let matches = list.contains { rangeStr in
+            checkVersionMatch(current: currentVer, range: rangeStr)
+        }
+
+        if matches {
+            return (L10n.t("sub.supported"), Theme.green)
+        } else {
+            return (L10n.t("sub.unverified"), Theme.orange)
+        }
+    }
+
+    private func checkVersionMatch(current: String, range: String) -> Bool {
+        let clean = range.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.isEmpty { return false }
+        if clean.contains("-") {
+            let parts = clean.components(separatedBy: "-").map { $0.trimmingCharacters(in: .whitespaces) }
+            if parts.count == 2 {
+                let minVer = parts[0]
+                let maxVer = parts[1]
+                return current.compare(minVer, options: .numeric) != .orderedAscending &&
+                       current.compare(maxVer, options: .numeric) != .orderedDescending
+            }
+        }
+        return current.hasPrefix(clean)
     }
 
     private func kv(_ key: String, _ value: String, color: Color = Theme.text) -> some View {

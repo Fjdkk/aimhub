@@ -48,7 +48,8 @@ public enum L10n {
         "home.pickInPatch": [.vietnamese: "Vào tab PATCH để chọn game", .english: "Go to PATCH tab to pick a game"],
         "home.openGame": [.vietnamese: "Bấm để mở game đã chọn", .english: "Tap to open the selected game"],
         "home.noNotice": [.vietnamese: "Chưa có thông báo", .english: "No notices yet"],
-        "home.modsOn": [.vietnamese: "Mod đang bật", .english: "Mods enabled"],
+        "home.modsOn": [.vietnamese: "Mod đang bật", .english: "Active mods"],
+        "home.noModOn": [.vietnamese: "Chưa bật mod nào", .english: "No active mods"],
         "home.ping": [.vietnamese: "Ping", .english: "Ping"],
         "home.fps": [.vietnamese: "FPS", .english: "FPS"],
         "home.connectedSince": [.vietnamese: "Kết nối lúc", .english: "Connected at"],
@@ -60,7 +61,7 @@ public enum L10n {
         "patch.loading": [.vietnamese: "Đang tải...", .english: "Loading..."],
 
         // ===== Mod list =====
-        "mod.oneAtATime": [.vietnamese: "Chỉ được bật 1 mod. Bật mod khác thì mod cũ tự tắt.", .english: "Only 1 mod at a time. Enabling another turns off the previous one."],
+        "mod.oneAtATime": [.vietnamese: "Các mod cùng nhóm file (như Aim) tự thay thế nhau. Có thể bật kết hợp các mod khác nhóm (như Định vị + Aim).", .english: "Mods sharing the same file replace each other. Different mod types (e.g. Aim + Locator) can be used together."],
         "mod.none": [.vietnamese: "Chưa có mod nào cho game này.", .english: "No mods for this game yet."],
         "mod.reset": [.vietnamese: "RESET MẶC ĐỊNH", .english: "RESET TO DEFAULT"],
         "mod.resetHint": [.vietnamese: "Khi bật mod, file gốc của game được tự sao lưu trước khi ghi. Bấm RESET để khôi phục file gốc và tắt hết mod.", .english: "When you enable a mod, the game's original files are backed up before writing. Tap RESET to restore originals and turn off all mods."],
@@ -107,6 +108,8 @@ public enum L10n {
         "sub.latest": [.vietnamese: "Bản mới nhất ✓", .english: "Latest ✓"],
         "sub.iosSupport": [.vietnamese: "Hỗ trợ iOS", .english: "iOS support"],
         "sub.supported": [.vietnamese: "Được hỗ trợ ✓", .english: "Supported ✓"],
+        "sub.unverified": [.vietnamese: "Chưa xác minh ⚠️", .english: "Unverified ⚠️"],
+        "sub.sandboxRestricted": [.vietnamese: "Chưa cấp quyền Sandbox ⚠️", .english: "Sandbox restricted ⚠️"],
         "sub.verifiedRange": [.vietnamese: "Phạm vi đã xác minh", .english: "Verified range"],
         "sub.deviceSect": [.vietnamese: "THIẾT BỊ", .english: "DEVICE"],
         "sub.deviceID": [.vietnamese: "Mã thiết bị", .english: "Device ID"],
@@ -131,5 +134,19 @@ public enum L10n {
         "err.keyNotFound": [.vietnamese: "Key không tồn tại", .english: "Key does not exist"],
         "err.keyExpired": [.vietnamese: "Key đã hết hạn", .english: "Key has expired"],
         "err.deviceMismatch": [.vietnamese: "Key đã được kích hoạt trên thiết bị khác", .english: "Key already activated on another device"],
+
+        // ===== ModManager & Container errors =====
+        "err.containerUnavailable": [
+            .vietnamese: "Không thể truy cập dữ liệu game: Phiên bản iOS hoặc chứng chỉ cài đặt hiện tại chưa được hỗ trợ. Vui lòng cập nhật iOS hoặc liên hệ Admin để được hỗ trợ.",
+            .english: "Cannot access game data: Current iOS version or certificate is not supported. Please update iOS or contact Admin for support."
+        ],
+        "err.noBackup": [
+            .vietnamese: "Không tìm thấy dữ liệu sao lưu gốc.",
+            .english: "No original backup data found."
+        ],
+        "err.ioFailed": [
+            .vietnamese: "Lỗi ghi dữ liệu",
+            .english: "File write error"
+        ]
     ]
 }

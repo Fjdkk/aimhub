@@ -220,11 +220,49 @@ struct HomeView: View {
     }
 
     private var statsCard: some View {
-        HStack {
-            Text(L10n.t("home.modsOn")).foregroundColor(Theme.text)
-            Spacer()
-            Text("\(appState.activeModID != nil ? 1 : 0) / \(totalMods)")
-                .foregroundColor(Theme.muted)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(L10n.t("home.modsOn")).foregroundColor(Theme.text)
+                Spacer()
+                Text("\(appState.activeMods.count) / \(totalMods)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(appState.activeMods.isEmpty ? Theme.muted : Theme.accent)
+            }
+
+            if !appState.activeModNames.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(appState.activeModNames, id: \.self) { name in
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(Theme.green)
+                                    .frame(width: 6, height: 6)
+                                    .shadow(color: Theme.green.opacity(0.8), radius: 3)
+                                Text(name)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(Theme.text)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Theme.card2)
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Theme.accent.opacity(0.4), lineWidth: 1)
+                            )
+                        }
+                    }
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Theme.muted.opacity(0.4))
+                        .frame(width: 6, height: 6)
+                    Text(L10n.t("home.noModOn"))
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.muted)
+                }
+            }
         }
         .card(padding: 14)
     }
