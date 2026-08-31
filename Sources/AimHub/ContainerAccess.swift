@@ -13,7 +13,7 @@ public final class ContainerAccess {
     /// Nhận log chẩn đoán (AppState gán vào để đẩy vào Nhật ký phiên).
     public static var onDiagnostic: ((String) -> Void)?
 
-    private static func diag(_ message: String) {
+    public static func diag(_ message: String) {
         print("[AimHub][Container] \(message)")
         onDiagnostic?(message)
     }
