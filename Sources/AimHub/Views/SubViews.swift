@@ -507,18 +507,56 @@ struct AboutView: View {
     }
 
     private func checkVersionMatch(current: String, range: String) -> Bool {
-        let clean = range.trimmingCharacters(in: .whitespacesAndNewlines)
+        var clean = range.trimmingCharacters(in: .whitespacesAndNewlines)
         if clean.isEmpty { return false }
+
+        // Bỏ các tiền tố như "iOS", "iPadOS", "v.", "v", "version"
+        let lower = clean.lowercased()
+        if lower.hasPrefix("ios") {
+            clean = String(clean.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+        } else if lower.hasPrefix("ipados") {
+            clean = String(clean.dropFirst(6)).trimmingCharacters(in: .whitespaces)
+        }
+
+        // Chuẩn hoá các loại dấu gạch ngang (en-dash, em-dash, tilde, chữ đến/to)
+        clean = clean.replacingOccurrences(of: "–", with: "-")
+                     .replacingOccurrences(of: "—", with: "-")
+                     .replacingOccurrences(of: "~", with: "-")
+                     .replacingOccurrences(of: " đến ", with: "-")
+                     .replacingOccurrences(of: " to ", with: "-")
+
         if clean.contains("-") {
             let parts = clean.components(separatedBy: "-").map { $0.trimmingCharacters(in: .whitespaces) }
             if parts.count == 2 {
-                let minVer = parts[0]
-                let maxVer = parts[1]
-                return current.compare(minVer, options: .numeric) != .orderedAscending &&
-                       current.compare(maxVer, options: .numeric) != .orderedDescending
+                var minVer = parts[0]
+                var maxVer = parts[1]
+
+                // Chuẩn hoá .x (vd: 17.7.x -> 17.7.999)
+                minVer = minVer.replacingOccurrences(of: ".x", with: ".0", options: .caseInsensitive)
+                maxVer = maxVer.replacingOccurrences(of: ".x", with: ".999", options: .caseInsensitive)
+
+                minVer = extractVersionNumber(from: minVer)
+                maxVer = extractVersionNumber(from: maxVer)
+
+                if !minVer.isEmpty && !maxVer.isEmpty {
+                    let curNorm = extractVersionNumber(from: current)
+                    return curNorm.compare(minVer, options: .numeric) != .orderedAscending &&
+                           curNorm.compare(maxVer, options: .numeric) != .orderedDescending
+                }
             }
         }
-        return current.hasPrefix(clean)
+
+        let targetVer = extractVersionNumber(from: clean)
+        let curNorm = extractVersionNumber(from: current)
+        return !targetVer.isEmpty && (curNorm.hasPrefix(targetVer) || targetVer.hasPrefix(curNorm))
+    }
+
+    private func extractVersionNumber(from string: String) -> String {
+        let pattern = "^[0-9]+(\\.[0-9]+)*"
+        if let range = string.range(of: pattern, options: .regularExpression) {
+            return String(string[range])
+        }
+        return string.trimmingCharacters(in: .whitespaces)
     }
 
     private func kv(_ key: String, _ value: String, color: Color = Theme.text) -> some View {
