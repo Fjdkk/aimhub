@@ -483,80 +483,12 @@ struct AboutView: View {
     }
 
     private var iosSupportStatus: (text: String, color: Color) {
-        // 1. Kiểm tra nạp thư viện Sandbox Container hệ thống
-        guard ContainerAccess.shared.isAvailable else {
-            return (L10n.t("sub.sandboxRestricted"), Theme.red)
-        }
-
-        // 2. Kiểm tra dải phiên bản iOS từ Server (nếu có cấu hình trên Admin)
-        let list = appState.versionInfo?.iosSupported ?? []
-        if list.isEmpty {
-            return (L10n.t("sub.supported"), Theme.green)
-        }
-
-        let currentVer = DeviceInfo.osVersion
-        let matches = list.contains { rangeStr in
-            checkVersionMatch(current: currentVer, range: rangeStr)
-        }
-
-        if matches {
+        // Kiểm tra trực tiếp trên máy: nếu nạp được thư viện Sandbox Container hệ thống -> Được hỗ trợ ✓
+        if ContainerAccess.shared.isAvailable {
             return (L10n.t("sub.supported"), Theme.green)
         } else {
-            return (L10n.t("sub.unverified"), Theme.orange)
+            return (L10n.t("sub.sandboxRestricted"), Theme.red)
         }
-    }
-
-    private func checkVersionMatch(current: String, range: String) -> Bool {
-        var clean = range.trimmingCharacters(in: .whitespacesAndNewlines)
-        if clean.isEmpty { return false }
-
-        // Bỏ các tiền tố như "iOS", "iPadOS", "v.", "v", "version"
-        let lower = clean.lowercased()
-        if lower.hasPrefix("ios") {
-            clean = String(clean.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-        } else if lower.hasPrefix("ipados") {
-            clean = String(clean.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-        }
-
-        // Chuẩn hoá các loại dấu gạch ngang (en-dash, em-dash, tilde, chữ đến/to)
-        clean = clean.replacingOccurrences(of: "–", with: "-")
-                     .replacingOccurrences(of: "—", with: "-")
-                     .replacingOccurrences(of: "~", with: "-")
-                     .replacingOccurrences(of: " đến ", with: "-")
-                     .replacingOccurrences(of: " to ", with: "-")
-
-        if clean.contains("-") {
-            let parts = clean.components(separatedBy: "-").map { $0.trimmingCharacters(in: .whitespaces) }
-            if parts.count == 2 {
-                var minVer = parts[0]
-                var maxVer = parts[1]
-
-                // Chuẩn hoá .x (vd: 17.7.x -> 17.7.999)
-                minVer = minVer.replacingOccurrences(of: ".x", with: ".0", options: .caseInsensitive)
-                maxVer = maxVer.replacingOccurrences(of: ".x", with: ".999", options: .caseInsensitive)
-
-                minVer = extractVersionNumber(from: minVer)
-                maxVer = extractVersionNumber(from: maxVer)
-
-                if !minVer.isEmpty && !maxVer.isEmpty {
-                    let curNorm = extractVersionNumber(from: current)
-                    return curNorm.compare(minVer, options: .numeric) != .orderedAscending &&
-                           curNorm.compare(maxVer, options: .numeric) != .orderedDescending
-                }
-            }
-        }
-
-        let targetVer = extractVersionNumber(from: clean)
-        let curNorm = extractVersionNumber(from: current)
-        return !targetVer.isEmpty && (curNorm.hasPrefix(targetVer) || targetVer.hasPrefix(curNorm))
-    }
-
-    private func extractVersionNumber(from string: String) -> String {
-        let pattern = "^[0-9]+(\\.[0-9]+)*"
-        if let range = string.range(of: pattern, options: .regularExpression) {
-            return String(string[range])
-        }
-        return string.trimmingCharacters(in: .whitespaces)
     }
 
     private func kv(_ key: String, _ value: String, color: Color = Theme.text) -> some View {
