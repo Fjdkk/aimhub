@@ -87,14 +87,40 @@ struct KeyView: View {
                 // Thông báo lỗi (slide + fade)
                 Group {
                     if let error = errorText, !error.isEmpty {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 12))
-                            Text(error)
-                                .font(.system(size: 12, weight: .medium))
-                                .lineLimit(3)
+                        VStack(spacing: 8) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 13))
+                                Text(error)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .lineLimit(4)
+                            }
+                            .foregroundColor(Theme.red)
+
+                            if isNetworkError(error) {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "antenna.radiowaves.left.and.right")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(Theme.accent)
+                                        Text("Hướng dẫn khắc phục:")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundColor(Theme.text)
+                                    }
+                                    Text("• Đổi qua lại giữa mạng Wi-Fi và 4G\n• Tắt các app VPN, 1.1.1.1 hoặc chặn quảng cáo\n• Cài đặt iPhone > AimHub > bật 'WLAN & Dữ liệu di động'")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Theme.muted)
+                                        .lineSpacing(2)
+                                }
+                                .padding(10)
+                                .background(Theme.card.opacity(0.8))
+                                .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Theme.border, lineWidth: 1)
+                                )
+                            }
                         }
-                        .foregroundColor(Theme.red)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(Theme.red.opacity(0.10))
@@ -191,7 +217,7 @@ struct KeyView: View {
     }
 
     private func activate() {
-        let value = keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = keyInput.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !value.isEmpty else {
             showError(L10n.t("key.empty"))
             return
@@ -213,6 +239,15 @@ struct KeyView: View {
                 showError(error.localizedDescription)
             }
         }
+    }
+
+    private func isNetworkError(_ text: String) -> Bool {
+        let l = text.lowercased()
+        return l.contains("thời gian chờ") ||
+               l.contains("kết nối") ||
+               l.contains("timed out") ||
+               l.contains("internet") ||
+               l.contains("mạng")
     }
 
     private func showError(_ message: String) {

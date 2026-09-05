@@ -132,6 +132,7 @@ final class AppState: ObservableObject {
         KeyStorage.clear()
         UserDefaults.standard.removeObject(forKey: lastActiveKey)
         stopHeartbeat()
+        stopPingLoop()
     }
 
     func checkVersion() {
@@ -152,6 +153,8 @@ final class AppState: ObservableObject {
         }
     }
 
+    private var pingTask: Task<Void, Never>?
+
     func loadGames() async {
         do {
             games = try await server.fetchGames()
@@ -161,21 +164,33 @@ final class AppState: ObservableObject {
             if let saved = UserDefaults.standard.string(forKey: "activeBundleID") {
                 activeGame = games.first(where: { $0.bundleID == saved })
             }
-            await measurePing()
+            startPingLoop()
         } catch {
             isConnected = false
+            stopPingLoop()
             log("Lỗi kết nối máy chủ", level: .error)
         }
     }
 
-    /// Đo ping mỗi 5 giây khi đang kết nối.
-    private func measurePing() async {
-        while isConnected {
-            if let ms = await server.ping() {
-                pingMs = ms
+    /// Đo ping mỗi 5 giây trong background khi đang kết nối.
+    private func startPingLoop() {
+        guard pingTask == nil else { return }
+        pingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self = self, self.isConnected else { break }
+                let ms = await self.server.ping()
+                if !Task.isCancelled {
+                    self.pingMs = ms
+                }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            self?.pingTask = nil
         }
+    }
+
+    private func stopPingLoop() {
+        pingTask?.cancel()
+        pingTask = nil
     }
 
     func selectGame(_ game: Game?) {
@@ -436,6 +451,7 @@ final class AppState: ObservableObject {
         displayLink?.invalidate()
         heartbeatTask?.cancel()
         announcementPollTask?.cancel()
+        pingTask?.cancel()
         if let token = notificationTapToken {
             NotificationCenter.default.removeObserver(token)
         }

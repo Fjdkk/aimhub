@@ -147,36 +147,106 @@ public enum Language: String, Codable {
     case english
 }
 
-public final class ServerClient {
+public final class ServerClient: @unchecked Sendable {
     public static let shared = ServerClient()
 
     private let baseURL: String
+    private let session: URLSession
 
     public init(baseURL: String = ServerConfig.baseURL) {
         self.baseURL = baseURL
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 25
+        config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = true
+        config.allowsCellularAccess = true
+        config.allowsExpensiveNetworkAccess = true
+        config.allowsConstrainedNetworkAccess = true
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
+        self.session = URLSession(configuration: config)
     }
 
     private func makeURL(_ path: String) throws -> URL {
-        guard let url = URL(string: baseURL + path) else {
+        let base = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+        let cleanPath = path.hasPrefix("/") ? path : "/" + path
+        guard let url = URL(string: base + cleanPath) else {
             throw ServerError.invalidURL
         }
         return url
     }
 
-    private func get<T: Decodable>(_ path: String) async throws -> T {
-        let url = try makeURL(path)
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 15
-        let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse {
-            guard http.statusCode == 200 else {
-                throw ServerError.http(http.statusCode)
+    private func executeWithRetry<T>(
+        maxRetries: Int = 2,
+        initialDelay: Double = 1.0,
+        operation: () async throws -> T
+    ) async throws -> T {
+        var lastError: Error?
+        for attempt in 0...maxRetries {
+            do {
+                return try await operation()
+            } catch {
+                lastError = error
+                let canRetry: Bool
+                if let urlErr = error as? URLError {
+                    switch urlErr.code {
+                    case .timedOut, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .networkConnectionLost, .notConnectedToInternet:
+                        canRetry = true
+                    default:
+                        canRetry = false
+                    }
+                } else {
+                    canRetry = false
+                }
+
+                if canRetry && attempt < maxRetries {
+                    let delaySeconds = initialDelay * (attempt == 0 ? 1.0 : 2.0)
+                    try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                    continue
+                }
+                throw wrapError(error)
             }
         }
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw ServerError.decoding(error.localizedDescription)
+        throw wrapError(lastError ?? ServerError.message("Lỗi kết nối máy chủ"))
+    }
+
+    private func wrapError(_ error: Error) -> Error {
+        if let serverError = error as? ServerError {
+            return serverError
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut:
+                return ServerError.message("Hết thời gian chờ kết nối máy chủ. Vui lòng kiểm tra lại 4G/Wi-Fi hoặc tắt VPN nếu đang bật.")
+            case .notConnectedToInternet:
+                return ServerError.message("Không có kết nối Internet. Vui lòng bật Wi-Fi/4G và cho phép ứng dụng truy cập dữ liệu mạng.")
+            case .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+                return ServerError.message("Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng hoặc thử đổi mạng khác.")
+            case .networkConnectionLost:
+                return ServerError.message("Kết nối mạng bị gián đoạn. Vui lòng thử lại.")
+            default:
+                return ServerError.message("Lỗi kết nối: \(urlError.localizedDescription)")
+            }
+        }
+        return error
+    }
+
+    private func get<T: Decodable>(_ path: String) async throws -> T {
+        try await executeWithRetry {
+            let url = try self.makeURL(path)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 25
+            let (data, response) = try await self.session.data(for: request)
+            if let http = response as? HTTPURLResponse {
+                guard http.statusCode == 200 else {
+                    throw ServerError.http(http.statusCode)
+                }
+            }
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch {
+                throw ServerError.decoding(error.localizedDescription)
+            }
         }
     }
 
@@ -186,27 +256,30 @@ public final class ServerClient {
     }
 
     public func activateKey(key: String, deviceID: String) async throws -> KeyInfo {
-        let url = try makeURL("/api/key/activate")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 15
-        let body: [String: String] = ["key": key, "device_id": deviceID]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse {
-            guard http.statusCode == 200 else {
-                if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let detail = obj["detail"] as? String {
-                    throw ServerError.message(translate(detail))
+        let cleanKey = key.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return try await executeWithRetry(maxRetries: 2, initialDelay: 1.0) {
+            let url = try self.makeURL("/api/key/activate")
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 25
+            let body: [String: String] = ["key": cleanKey, "device_id": deviceID]
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (data, response) = try await self.session.data(for: request)
+            if let http = response as? HTTPURLResponse {
+                guard http.statusCode == 200 else {
+                    if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let detail = obj["detail"] as? String {
+                        throw ServerError.message(self.translate(detail))
+                    }
+                    throw ServerError.http(http.statusCode)
                 }
-                throw ServerError.http(http.statusCode)
             }
-        }
-        do {
-            return try JSONDecoder().decode(KeyInfo.self, from: data)
-        } catch {
-            throw ServerError.decoding(error.localizedDescription)
+            do {
+                return try JSONDecoder().decode(KeyInfo.self, from: data)
+            } catch {
+                throw ServerError.decoding(error.localizedDescription)
+            }
         }
     }
 
@@ -235,7 +308,7 @@ public final class ServerClient {
         request.timeoutInterval = 10
         let start = Date()
         do {
-            _ = try await URLSession.shared.data(for: request)
+            _ = try await session.data(for: request)
             return Int(Date().timeIntervalSince(start) * 1000)
         } catch {
             return nil
@@ -243,14 +316,16 @@ public final class ServerClient {
     }
 
     public func downloadRuleFile(ruleID: String) async throws -> Data {
-        let url = try makeURL("/api/rules/\(ruleID)/file")
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 30
-        let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse {
-            guard http.statusCode == 200 else { throw ServerError.http(http.statusCode) }
+        try await executeWithRetry(maxRetries: 2, initialDelay: 1.5) {
+            let url = try self.makeURL("/api/rules/\(ruleID)/file")
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 45
+            let (data, response) = try await self.session.data(for: request)
+            if let http = response as? HTTPURLResponse {
+                guard http.statusCode == 200 else { throw ServerError.http(http.statusCode) }
+            }
+            return data
         }
-        return data
     }
 
     private func translate(_ detail: String) -> String {
