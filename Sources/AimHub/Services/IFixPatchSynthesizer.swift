@@ -30,14 +30,14 @@ public enum IFixPatchSynthesizer {
             writeI32(0x12DA + 4, 0) // loop = 0
             writeI32(0x12F2 + 4, 2) // positionCount = 2
 
-            // Point 0 (IL_298, IL_299): X = local 9, Y = 2000f (top of screen)
+            // Point 0 (IL_298, IL_299): Screen Top Center
+            // X = local 9 (horizontal center), Y = local 7 + local 8 (head screen Y + box height, well above player head)
             writeI32(0x1482, 20) // Ldloc
             writeI32(0x1482 + 4, 9)
-            writeI32(0x148A, 3) // Ldc_R4
-            let f2000 = Int32(bitPattern: Float(2000.0).bitPattern)
-            writeI32(0x148A + 4, f2000)
+            writeI32(0x148A, 3) // Ldc_R4 1200f
+            writeI32(0x148A + 4, 1150681088)
 
-            // Point 1 (IL_307, IL_308): X = local 9, Y = local 7 (head top)
+            // Point 1 (IL_307, IL_308): Head Top
             writeI32(0x14CA, 20) // Ldloc
             writeI32(0x14CA + 4, 9)
             writeI32(0x14D2, 20) // Ldloc
@@ -113,12 +113,11 @@ public enum IFixPatchSynthesizer {
             writeI32(0x166A, 136); writeI32(0x166A + 4, 1)
         }
 
-        // 3. ESP Visible (Wall ESP) — remove IsVisible filter
+        // 3. ESP Visible (Wall ESP) — always show through walls by default when ESP is on
         // IL_053 at offset 0x0CDA: Brfalse 281 → Pop 0
         // This makes ALL alive enemies render ESP even behind walls.
         // The Material already uses _ZTest=Always so it draws on top.
-        let hasVisible = activeSlots.contains("esp_visible")
-        if hasVisible && (hasBox || hasLine) {
+        if hasBox || hasLine {
             writeI32(0x0CDA, 160) // Pop (consume IsVisible bool)
             writeI32(0x0CDA + 4, 0)
         }
