@@ -1,16 +1,40 @@
 import SwiftUI
 
+struct TabItem: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let icon: String
+    let order: Int
+}
+
 struct ModListView: View {
     let game: Game
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
 
-    @State private var rules: [RuleDetail] = []
+    @State private var allRules: [RuleDetail] = []
+    @State private var tabs: [TabItem] = []
+    @State private var selectedTabID: String = "all"
     @State private var busyModID: String?
     @State private var errorText: String?
     @State private var loaded = false
     @State private var toastText: String?
     @State private var toastOK = true
+
+    var displayedRules: [RuleDetail] {
+        if selectedTabID == "all" {
+            return allRules
+        }
+        return allRules.filter { rule in
+            if let tid = rule.tabID {
+                return tid == selectedTabID
+            }
+            if selectedTabID == "tab_aim" {
+                return true
+            }
+            return false
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -18,6 +42,12 @@ struct ModListView: View {
 
             VStack(spacing: 0) {
                 header
+
+                if !tabs.isEmpty {
+                    tabBar
+                        .padding(.bottom, 8)
+                }
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(L10n.t("mod.oneAtATime"))
@@ -26,15 +56,15 @@ struct ModListView: View {
                             .padding(.horizontal, 4)
                             .padding(.bottom, 12)
 
-                        if rules.isEmpty && !loaded {
+                        if allRules.isEmpty && !loaded {
                             ProgressView()
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 40)
                         } else {
-                            ForEach(rules) { rule in
+                            ForEach(displayedRules) { rule in
                                 modRow(rule)
                             }
-                            if rules.isEmpty {
+                            if displayedRules.isEmpty {
                                 Text(L10n.t("mod.none"))
                                     .font(.system(size: 13))
                                     .foregroundColor(Theme.muted)
@@ -77,6 +107,49 @@ struct ModListView: View {
         }
     }
 
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(tabs) { tab in
+                    let isSelected = selectedTabID == tab.id
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) {
+                            selectedTabID = tab.id
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 11, weight: .bold))
+                            Text(tab.name)
+                                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                        }
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 8)
+                        .foregroundColor(isSelected ? .white : Theme.muted)
+                        .background(
+                            ZStack {
+                                if isSelected {
+                                    Theme.gradient()
+                                        .cornerRadius(16)
+                                        .shadow(color: Theme.accent.opacity(0.45), radius: 6, y: 2)
+                                } else {
+                                    Theme.card
+                                        .cornerRadius(16)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(Theme.border, lineWidth: 0.8)
+                                        )
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+        }
+    }
+
     private func toast(text: String, ok: Bool) -> some View {
         HStack(spacing: 10) {
             Image(systemName: ok ? "checkmark" : "exclamationmark")
@@ -113,17 +186,75 @@ struct ModListView: View {
         }
     }
 
+    private func iconForTab(name: String, id: String) -> String {
+        let low = (name + " " + id).lowercased()
+        if low.contains("aim") || low.contains("ngắm") { return "crosshair" }
+        if low.contains("định vị") || low.contains("locator") || low.contains("wall") || low.contains("tường") { return "eye.fill" }
+        if low.contains("esp") || low.contains("box") { return "viewfinder" }
+        if low.contains("skin") || low.contains("súng") || low.contains("đồ") { return "tshirt.fill" }
+        return "slider.horizontal.3"
+    }
+
     private func loadRules() async {
         defer { loaded = true }
         let allowed = appState.activeKey?.mods
         let projects = game.projects ?? []
         for project in projects {
             if let detail = try? await ServerClient.shared.fetchProject(projectID: project.id) {
-                rules = filter(detail.rules, allowed: allowed)
-                if !rules.isEmpty { return }
+                let filtered = filter(detail.rules, allowed: allowed)
+                allRules = filtered
+
+                // Xây dựng danh sách Tab động
+                var extractedTabs: [TabItem] = []
+                extractedTabs.append(TabItem(id: "all", name: "Tất cả", icon: "square.grid.2x2.fill", order: 0))
+
+                if let serverTabs = detail.tabs, !serverTabs.isEmpty {
+                    for st in serverTabs {
+                        if st.visible != false {
+                            extractedTabs.append(TabItem(
+                                id: st.id,
+                                name: st.name,
+                                icon: iconForTab(name: st.name, id: st.id),
+                                order: st.order ?? 99
+                            ))
+                        }
+                    }
+                } else {
+                    var seenIDs = Set<String>()
+                    for r in filtered {
+                        let tid = r.tabID ?? "tab_aim"
+                        let tname = r.tabName ?? "List Aim"
+                        if r.tabVisible != false && !seenIDs.contains(tid) {
+                            seenIDs.insert(tid)
+                            extractedTabs.append(TabItem(
+                                id: tid,
+                                name: tname,
+                                icon: iconForTab(name: tname, id: tid),
+                                order: r.tabOrder ?? 99
+                            ))
+                        }
+                    }
+                }
+
+                if extractedTabs.count <= 1 {
+                    extractedTabs = [
+                        TabItem(id: "all", name: "Tất cả", icon: "square.grid.2x2.fill", order: 0),
+                        TabItem(id: "tab_aim", name: "List Aim", icon: "crosshair", order: 1),
+                        TabItem(id: "tab_locator", name: "Định Vị + Xuyên tường", icon: "eye.fill", order: 2),
+                        TabItem(id: "tab_esp_box", name: "ESP BOX", icon: "viewfinder", order: 3),
+                        TabItem(id: "tab_skin", name: "Skin Mod", icon: "tshirt.fill", order: 4)
+                    ]
+                }
+
+                tabs = extractedTabs.sorted(by: { $0.order < $1.order })
+                if selectedTabID.isEmpty || !tabs.contains(where: { $0.id == selectedTabID }) {
+                    selectedTabID = tabs.first?.id ?? "all"
+                }
+
+                if !allRules.isEmpty { return }
             }
         }
-        rules = []
+        allRules = []
     }
 
     private func filter(_ list: [RuleDetail], allowed: [String]?) -> [RuleDetail] {
@@ -182,13 +313,35 @@ struct ModListView: View {
     private func modRow(_ rule: RuleDetail) -> some View {
         let isOn = appState.isModActive(ruleID: rule.ruleID)
         let busy = busyModID == rule.ruleID
+        let isEnabled = rule.enabled != false
+        let isInject = rule.mode == "inject"
 
         return HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(rule.name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(isOn ? .white : Theme.text)
-                    .shadow(color: isOn ? Theme.accent.opacity(0.7) : .clear, radius: 8)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(rule.name)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(isOn ? .white : (isEnabled ? Theme.text : Theme.muted))
+                        .shadow(color: isOn ? Theme.accent.opacity(0.7) : .clear, radius: 8)
+
+                    if !isEnabled {
+                        Text("Bảo trì")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(Theme.red)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Theme.red.opacity(0.15))
+                            .cornerRadius(6)
+                    } else if isInject {
+                        Text("Xoá khi tắt")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(Theme.accent)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background(Theme.accent.opacity(0.12))
+                            .cornerRadius(4)
+                    }
+                }
             }
 
             Spacer()
@@ -203,6 +356,7 @@ struct ModListView: View {
                     .frame(width: 22, height: 22)
                     .offset(x: isOn ? 11 : -11)
             }
+            .opacity(isEnabled ? 1.0 : 0.4)
             .overlay {
                 if busy {
                     ProgressView()
@@ -213,6 +367,10 @@ struct ModListView: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 guard busyModID == nil else { return }
+                guard isEnabled else {
+                    showToast("Chức năng này đang tạm bảo trì trên máy chủ!", ok: false)
+                    return
+                }
                 toggle(rule)
             }
         }
@@ -266,6 +424,17 @@ struct ModListView: View {
 
         Task {
             do {
+                // Tự động tắt bất kỳ mod nào cùng nhóm xung đột (vd: đổi giữa Aim Legit và Aim Lock)
+                let isAimExclusive = (rule.slot == "aim_legit" || rule.slot == "aim_lock")
+                for other in allRules {
+                    guard other.ruleID != rule.ruleID, appState.isModActive(ruleID: other.ruleID) else { continue }
+                    let sameGroup = (rule.conflictGroup != nil && rule.conflictGroup == other.conflictGroup)
+                    let isOtherAim = (other.slot == "aim_legit" || other.slot == "aim_lock")
+                    if sameGroup || (isAimExclusive && isOtherAim) {
+                        try await appState.turnOffMod(other)
+                    }
+                }
+
                 let modEntry = try await buildModEntry(rule, game: game)
                 try await appState.installMod(modEntry, rule: rule)
                 busyModID = nil
@@ -276,6 +445,7 @@ struct ModListView: View {
             }
         }
     }
+
     private func resetAll() {
         guard busyModID == nil else { return }
         busyModID = "reset"
@@ -306,13 +476,22 @@ struct ModListView: View {
             }
         }
         let destination = rule.destination ?? "Documents/\(rule.ruleID).bin"
-        let file = ModFile(name: rule.name,
-                           relativePath: destination,
-                           data: bytes)
+        var files: [ModFile] = [
+            ModFile(name: rule.name, relativePath: destination, data: bytes)
+        ]
+
+        // Nếu là mod patch IFix (Assembly-CSharp-patch.bytes) -> tự động nạp kèm localConfig.json
+        if destination.contains("Assembly-CSharp-patch.bytes") {
+            let configJson = "{\"testCodePatch\":true,\"resetGuest\":true}"
+            if let configData = configJson.data(using: .utf8) {
+                files.append(ModFile(name: "localConfig.json", relativePath: "Documents/localConfig.json", data: configData))
+            }
+        }
+
         return ModEntry(id: rule.ruleID,
                         displayName: rule.name,
                         description: "",
-                        files: [file])
+                        files: files)
     }
 
     private func gameLogoName(_ bundleID: String) -> String {

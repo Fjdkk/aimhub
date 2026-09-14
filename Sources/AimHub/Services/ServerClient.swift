@@ -49,11 +49,19 @@ public struct RuleSummary: Codable, Identifiable, Hashable {
     public var id: String { ruleID }
 }
 
+public struct TabDetail: Codable, Identifiable, Hashable {
+    public let id: String
+    public let name: String
+    public let order: Int?
+    public let visible: Bool?
+}
+
 public struct ProjectDetail: Codable, Identifiable, Hashable {
     public let id: String
     public let name: String
     public let game: String
     public let bundleID: String
+    public let tabs: [TabDetail]?
     public let rules: [RuleDetail]
 }
 
@@ -67,8 +75,32 @@ public struct RuleDetail: Codable, Identifiable, Hashable {
     public let bundleID: String?
     public let enabled: Bool?
     public let size: Int?
+    public let tabID: String?
+    public let tabName: String?
+    public let tabOrder: Int?
+    public let tabVisible: Bool?
+    public let mode: String?
+    public let conflictGroup: String?
 
     public var id: String { ruleID }
+
+    enum CodingKeys: String, CodingKey {
+        case ruleID
+        case name
+        case slot
+        case destination
+        case replacement
+        case original
+        case bundleID
+        case enabled
+        case size
+        case tabID = "tab_id"
+        case tabName = "tab_name"
+        case tabOrder = "tab_order"
+        case tabVisible = "tab_visible"
+        case mode
+        case conflictGroup = "conflict_group"
+    }
 }
 
 public struct KeyInfo: Codable, Hashable {

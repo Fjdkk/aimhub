@@ -6,11 +6,15 @@ public struct ActiveModItem: Codable, Equatable, Hashable {
     public let ruleID: String
     public let name: String
     public let destination: String
+    public let conflictGroup: String?
+    public let slot: String?
 
-    public init(ruleID: String, name: String, destination: String) {
+    public init(ruleID: String, name: String, destination: String, conflictGroup: String? = nil, slot: String? = nil) {
         self.ruleID = ruleID
         self.name = name
         self.destination = destination
+        self.conflictGroup = conflictGroup
+        self.slot = slot
     }
 }
 
@@ -18,10 +22,10 @@ public struct ActiveModItem: Codable, Equatable, Hashable {
 final class AppState: ObservableObject {
     @Published var activeKey: KeyInfo?
     @Published var activeGame: Game?
-    @Published var activeMods: [String: ActiveModItem] = [:] // key: destination path
+    @Published var activeMods: [String: ActiveModItem] = [:] // key: ruleID
 
     var activeModID: String? {
-        activeMods.values.first?.ruleID
+        activeMods.keys.first
     }
 
     var activeModNames: [String] {
@@ -29,11 +33,11 @@ final class AppState: ObservableObject {
     }
 
     func isModActive(ruleID: String) -> Bool {
-        activeMods.values.contains(where: { $0.ruleID == ruleID })
+        activeMods[ruleID] != nil
     }
 
     func activeMod(forDestination destination: String) -> ActiveModItem? {
-        activeMods[destination]
+        activeMods.values.first(where: { $0.destination == destination })
     }
 
     @Published var forceUpdate: Bool = false
@@ -212,17 +216,34 @@ final class AppState: ObservableObject {
     func installMod(_ mod: ModEntry, rule: RuleDetail) async throws {
         guard let game = activeGame else { throw ModManagerError.containerUnavailable }
         let dest = rule.destination ?? mod.files.first?.relativePath ?? "Documents/\(rule.ruleID).bin"
+        let mode = rule.mode ?? "replace"
         
-        // Nếu cùng file destination đang có mod khác bật (vd: đang bật Aim Body mà bấm Aim Neck)
-        // -> Khôi phục file gốc của destination đó trước
-        if let existing = activeMods[dest], existing.ruleID != rule.ruleID {
-            try? ModManager.shared.restoreFile(relativePath: dest, bundleID: game.bundleID)
-            log("Tự động tắt \(existing.name) do cùng can thiệp file")
+        var current = activeMods
+
+        // 1. Nếu mode là replace (thay thế file game gốc), chỉ cho phép 1 mod trên cùng destination
+        if mode == "replace" {
+            let conflicting = current.values.filter { $0.destination == dest && $0.ruleID != rule.ruleID }
+            for old in conflicting {
+                try? ModManager.shared.restoreFile(relativePath: dest, bundleID: game.bundleID, mode: mode)
+                current.removeValue(forKey: old.ruleID)
+                log("Tự động tắt \(old.name) do cùng can thiệp file")
+            }
         }
 
-        try ModManager.shared.installMod(mod, bundleID: game.bundleID)
-        var current = activeMods
-        current[dest] = ActiveModItem(ruleID: rule.ruleID, name: rule.name, destination: dest)
+        // 2. Xử lý nhóm độc quyền (Aim Legit vs Aim Lock hoặc cùng conflictGroup)
+        let isAimExclusive = (rule.slot == "aim_legit" || rule.slot == "aim_lock")
+        for old in current.values {
+            if old.ruleID == rule.ruleID { continue }
+            let sameGroup = (rule.conflictGroup != nil && rule.conflictGroup == old.conflictGroup)
+            let isOldAim = (old.slot == "aim_legit" || old.slot == "aim_lock")
+            if sameGroup || (isAimExclusive && isOldAim) {
+                current.removeValue(forKey: old.ruleID)
+                log("Tự động chuyển đổi: tắt \(old.name) để bật \(rule.name)")
+            }
+        }
+
+        try ModManager.shared.installMod(mod, bundleID: game.bundleID, mode: mode)
+        current[rule.ruleID] = ActiveModItem(ruleID: rule.ruleID, name: rule.name, destination: dest, conflictGroup: rule.conflictGroup, slot: rule.slot)
         saveActiveMods(current, for: game.bundleID)
         log("Đã bật \(rule.name)")
     }
@@ -230,10 +251,20 @@ final class AppState: ObservableObject {
     func turnOffMod(_ rule: RuleDetail) async throws {
         guard let game = activeGame else { throw ModManagerError.containerUnavailable }
         let dest = rule.destination ?? "Documents/\(rule.ruleID).bin"
-        try ModManager.shared.restoreFile(relativePath: dest, bundleID: game.bundleID)
+        let mode = rule.mode ?? "replace"
+        
         var current = activeMods
-        current.removeValue(forKey: dest)
+        current.removeValue(forKey: rule.ruleID)
         saveActiveMods(current, for: game.bundleID)
+
+        // Chỉ khôi phục/xóa file nếu không còn mod nào khác dùng chung destination
+        let otherUsingSameDest = current.values.contains { $0.destination == dest }
+        if !otherUsingSameDest {
+            try ModManager.shared.restoreFile(relativePath: dest, bundleID: game.bundleID, mode: mode)
+            log("Đã gỡ bỏ file \(dest)")
+        } else {
+            log("Duy trì file \(dest) cho các tính năng khác đang bật")
+        }
         log("Đã tắt \(rule.name)")
     }
 
@@ -258,7 +289,11 @@ final class AppState: ObservableObject {
     private func loadActiveMods(for bundleID: String) {
         if let data = UserDefaults.standard.data(forKey: activeModsKey(for: bundleID)),
            let dict = try? JSONDecoder().decode([String: ActiveModItem].self, from: data) {
-            activeMods = dict
+            var normalized: [String: ActiveModItem] = [:]
+            for (_, v) in dict {
+                normalized[v.ruleID] = v
+            }
+            activeMods = normalized
         } else {
             activeMods = [:]
         }

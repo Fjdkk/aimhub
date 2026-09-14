@@ -192,6 +192,33 @@ public final class ModManager {
         UserDefaults.standard.set(list, forKey: registryKey(for: bundleID))
     }
 
+    // Registry cho các file tiêm mới (không có file gốc -> Tắt là xoá)
+    private func injectedRegistryKey(for bundleID: String) -> String {
+        "aimhub.injected.registry.\(bundleID)"
+    }
+
+    private func injectedRegistry(for bundleID: String) -> [String] {
+        UserDefaults.standard.stringArray(forKey: injectedRegistryKey(for: bundleID)) ?? []
+    }
+
+    private func saveInjectedRegistry(_ list: [String], for bundleID: String) {
+        UserDefaults.standard.set(list, forKey: injectedRegistryKey(for: bundleID))
+    }
+
+    private func recordInjectedFile(_ relativePath: String, bundleID: String) {
+        var list = injectedRegistry(for: bundleID)
+        if !list.contains(relativePath) {
+            list.append(relativePath)
+            saveInjectedRegistry(list, for: bundleID)
+        }
+    }
+
+    private func removeInjectedFile(_ relativePath: String, bundleID: String) {
+        var list = injectedRegistry(for: bundleID)
+        list.removeAll(where: { $0 == relativePath })
+        saveInjectedRegistry(list, for: bundleID)
+    }
+
     public func hasBackup(relativePath: String) -> Bool {
         guard let abs = try? absolute(relativePath) else { return false }
         return POSIXFile.exists(abs + backupExtension)
@@ -218,44 +245,62 @@ public final class ModManager {
         }
     }
 
-    public func installMod(_ mod: ModEntry, bundleID: String) throws {
+    public func installMod(_ mod: ModEntry, bundleID: String, mode: String = "replace") throws {
         _ = try prepareContainer(bundleID: bundleID)
         for file in mod.files {
-            try backupFile(relativePath: file.relativePath, bundleID: bundleID)
             let abs = try absolute(file.relativePath)
+            if mode == "inject" || !POSIXFile.exists(abs) {
+                // File tiêm mới: ghi nhận vào registry để khi tắt mod thì xóa sạch
+                recordInjectedFile(file.relativePath, bundleID: bundleID)
+            } else {
+                // File thay thế: sao lưu bản gốc thành .bak
+                try backupFile(relativePath: file.relativePath, bundleID: bundleID)
+            }
             try writeFile(data: file.data, to: abs)
         }
     }
 
-    public func restoreFile(relativePath: String, bundleID: String) throws {
+    public func restoreFile(relativePath: String, bundleID: String, mode: String = "replace") throws {
         _ = try prepareContainer(bundleID: bundleID)
         let abs = try absolute(relativePath)
         let backupPath = abs + backupExtension
-        guard POSIXFile.exists(backupPath) else { return }
-        do {
-            if POSIXFile.exists(abs) {
-                try POSIXFile.remove(abs)
+
+        if POSIXFile.exists(backupPath) {
+            // Có file backup -> khôi phục lại file gốc ban đầu
+            do {
+                if POSIXFile.exists(abs) {
+                    try POSIXFile.remove(abs)
+                }
+                try POSIXFile.move(from: backupPath, to: abs)
+                var list = registry(for: bundleID)
+                list.removeAll(where: { $0 == backupPath })
+                saveRegistry(list, for: bundleID)
+            } catch {
+                throw ModManagerError.ioFailed(error.localizedDescription)
             }
-            try POSIXFile.move(from: backupPath, to: abs)
-            var list = registry(for: bundleID)
-            list.removeAll(where: { $0 == backupPath })
-            saveRegistry(list, for: bundleID)
-        } catch {
-            throw ModManagerError.ioFailed(error.localizedDescription)
+        } else {
+            // Không có file backup HOẶC là mod tiêm mới -> TẮT LÀ XOÁ SẠCH!
+            if POSIXFile.exists(abs) {
+                do {
+                    try POSIXFile.remove(abs)
+                } catch {
+                    throw ModManagerError.ioFailed(error.localizedDescription)
+                }
+            }
+            removeInjectedFile(relativePath, bundleID: bundleID)
+        }
+
+        // Tự động dọn dẹp file cấu hình kèm theo nếu là patch IFix
+        if relativePath.contains("Assembly-CSharp-patch.bytes") {
+            if let configAbs = try? absolute("Documents/localConfig.json"), POSIXFile.exists(configAbs) {
+                try? POSIXFile.remove(configAbs)
+            }
         }
     }
 
     public func restoreFiles(for mod: ModEntry) throws {
         for file in mod.files {
-            let abs = try absolute(file.relativePath)
-            let backupPath = abs + backupExtension
-            guard POSIXFile.exists(backupPath) else { throw ModManagerError.noBackup }
-            do {
-                try POSIXFile.remove(abs)
-                try POSIXFile.move(from: backupPath, to: abs)
-            } catch {
-                throw ModManagerError.ioFailed(error.localizedDescription)
-            }
+            try restoreFile(relativePath: file.relativePath, bundleID: containerRoot ?? "")
         }
     }
 
@@ -267,7 +312,9 @@ public final class ModManager {
             let origPath = String(backupPath.dropLast(backupExtension.count))
             guard POSIXFile.exists(backupPath) else { continue }
             do {
-                try POSIXFile.remove(origPath)
+                if POSIXFile.exists(origPath) {
+                    try POSIXFile.remove(origPath)
+                }
                 try POSIXFile.move(from: backupPath, to: origPath)
                 restored += 1
             } catch {
@@ -275,6 +322,21 @@ public final class ModManager {
             }
         }
         saveRegistry([], for: bundleID)
+
+        // Xoá sạch toàn bộ các file tiêm mới
+        let injected = injectedRegistry(for: bundleID)
+        for rel in injected {
+            if let abs = try? absolute(rel), POSIXFile.exists(abs) {
+                try? POSIXFile.remove(abs)
+            }
+        }
+        saveInjectedRegistry([], for: bundleID)
+
+        // Dọn dẹp localConfig.json nếu có
+        if let configAbs = try? absolute("Documents/localConfig.json"), POSIXFile.exists(configAbs) {
+            try? POSIXFile.remove(configAbs)
+        }
+
         _ = restored
     }
 
