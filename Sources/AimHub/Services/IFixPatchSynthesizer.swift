@@ -94,8 +94,10 @@ public enum IFixPatchSynthesizer {
             writeI32(0x0B3A + 4, 1)
         }
 
+        let hasAimScope = activeSlots.contains("aim_on_scope")
+
         // 2. AIM Logic (Method 1 at 0x165E)
-        if hasAimLock {
+        if hasAimLock || hasAimScope {
             // Head Lock
             writeI32(0x1662, 57); writeI32(0x1662 + 4, 65538)
             writeI32(0x166A, 28); writeI32(0x166A + 4, 0)
