@@ -123,6 +123,21 @@ public enum IFixPatchSynthesizer {
             writeI32(0x0CDA + 4, 0)
         }
 
+        // 4. ESP Health (HP Color Indicator)
+        // Default color is Red (R=1f, G=0f, B=0f, A=1f) at IL_263..IL_266 (0x136A..0x1382)
+        // When ESP Health is enabled, switch box/line color to Vibrant Neon Green (R=0f, G=1f, B=0f, A=1f)
+        let hasHealth = activeSlots.contains("esp_health")
+        if hasHealth && (hasBox || hasLine) {
+            // IL_263 (R) = 0f
+            writeI32(0x136A + 4, 0)
+            // IL_264 (G) = 1f (0x3F800000 = 1065353216)
+            writeI32(0x1372 + 4, 1065353216)
+            // IL_265 (B) = 0f
+            writeI32(0x137A + 4, 0)
+            // IL_266 (A) = 1f
+            writeI32(0x1382 + 4, 1065353216)
+        }
+
         return Data(b)
     }
 }
