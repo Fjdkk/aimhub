@@ -30,18 +30,21 @@ public enum IFixPatchSynthesizer {
             writeI32(0x12DA + 4, 0) // loop = 0
             writeI32(0x12F2 + 4, 2) // positionCount = 2
 
-            // Point 0 (IL_298, IL_299): Screen Top Center
-            // X = local 9 (horizontal center), Y = local 7 + local 8 (head screen Y + box height, well above player head)
-            writeI32(0x1482, 20) // Ldloc
-            writeI32(0x1482 + 4, 9)
-            writeI32(0x148A, 3) // Ldc_R4 1200f
-            writeI32(0x148A + 4, 1150681088)
+            // Point 0 (IL_298..300): Screen Top Center (X=1200f, Y=1000f, Depth=0.4f)
+            writeI32(0x1482, 3) // Ldc_R4 1200f
+            writeI32(0x1482 + 4, 1150681088)
+            writeI32(0x148A, 3) // Ldc_R4 1000f
+            writeI32(0x148A + 4, 1148846080)
+            writeI32(0x1492, 3) // Ldc_R4 0.4f (Camera Screen Plane Depth)
+            writeI32(0x1492 + 4, 1053609165)
 
-            // Point 1 (IL_307, IL_308): Head Top
-            writeI32(0x14CA, 20) // Ldloc
+            // Point 1 (IL_307, IL_308): Enemy Head Top
+            writeI32(0x14CA, 20) // Ldloc 9
             writeI32(0x14CA + 4, 9)
-            writeI32(0x14D2, 20) // Ldloc
+            writeI32(0x14D2, 20) // Ldloc 7
             writeI32(0x14D2 + 4, 7)
+            writeI32(0x14DA, 20) // Ldloc 15 (Enemy distance)
+            writeI32(0x14DA + 4, 15)
 
             // Nop out points 2 and 3
             for p in stride(from: 0x14FA, through: 0x1582, by: 8) {
