@@ -403,6 +403,25 @@ struct ModListView: View {
         }
     }
 
+    private func currentActiveSlots(incorporating rule: RuleDetail, enabling: Bool) -> Set<String> {
+        var slots = Set<String>()
+        for r in allRules {
+            if appState.isModActive(ruleID: r.ruleID) {
+                if let slot = r.slot {
+                    slots.insert(slot)
+                }
+            }
+        }
+        if let currentSlot = rule.slot {
+            if enabling {
+                slots.insert(currentSlot)
+            } else {
+                slots.remove(currentSlot)
+            }
+        }
+        return slots
+    }
+
     private func toggle(_ rule: RuleDetail) {
         guard let game = appState.activeGame else { return }
         busyModID = rule.ruleID
@@ -412,6 +431,27 @@ struct ModListView: View {
             Task {
                 do {
                     try await appState.turnOffMod(rule)
+                    let dest = rule.destination ?? ""
+                    if dest.contains("Assembly-CSharp-patch.bytes") {
+                        let remainingSlots = currentActiveSlots(incorporating: rule, enabling: false)
+                        let remainingIFix = allRules.filter {
+                            ($0.destination ?? "").contains("Assembly-CSharp-patch.bytes") && appState.isModActive(ruleID: $0.ruleID)
+                        }
+                        if let firstRemaining = remainingIFix.first {
+                            // Cập nhật lại file patch tổng hợp cho các tính năng IFix còn lại
+                            let baseData = try await ServerClient.shared.downloadRuleFile(ruleID: firstRemaining.ruleID)
+                            let synth = IFixPatchSynthesizer.synthesize(baseData: baseData, activeSlots: remainingSlots)
+                            let configJson = "{\"testCodePatch\":true,\"resetGuest\":true}"
+                            var files: [ModFile] = [
+                                ModFile(name: firstRemaining.name, relativePath: dest, data: synth)
+                            ]
+                            if let configData = configJson.data(using: .utf8) {
+                                files.append(ModFile(name: "localConfig.json", relativePath: "Documents/localConfig.json", data: configData))
+                            }
+                            let entry = ModEntry(id: firstRemaining.ruleID, displayName: firstRemaining.name, description: "", files: files)
+                            try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
+                        }
+                    }
                     busyModID = nil
                     showToast(String(format: L10n.t("mod.off"), rule.name))
                 } catch {
@@ -476,11 +516,19 @@ struct ModListView: View {
             }
         }
         let destination = rule.destination ?? "Documents/\(rule.ruleID).bin"
+        var finalBytes = bytes
+
+        // Nếu là mod patch IFix -> tổng hợp tất cả các tính năng đang bật vào 1 file patch hoàn chỉnh
+        if destination.contains("Assembly-CSharp-patch.bytes") {
+            let activeSlots = currentActiveSlots(incorporating: rule, enabling: true)
+            finalBytes = IFixPatchSynthesizer.synthesize(baseData: bytes, activeSlots: activeSlots)
+        }
+
         var files: [ModFile] = [
-            ModFile(name: rule.name, relativePath: destination, data: bytes)
+            ModFile(name: rule.name, relativePath: destination, data: finalBytes)
         ]
 
-        // Nếu là mod patch IFix (Assembly-CSharp-patch.bytes) -> tự động nạp kèm localConfig.json
+        // Tự động nạp kèm localConfig.json
         if destination.contains("Assembly-CSharp-patch.bytes") {
             let configJson = "{\"testCodePatch\":true,\"resetGuest\":true}"
             if let configData = configJson.data(using: .utf8) {
