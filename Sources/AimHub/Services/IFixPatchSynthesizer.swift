@@ -113,6 +113,16 @@ public enum IFixPatchSynthesizer {
             writeI32(0x166A, 136); writeI32(0x166A + 4, 1)
         }
 
+        // 3. ESP Visible (Wall ESP) — remove IsVisible filter
+        // IL_053 at offset 0x0CDA: Brfalse 281 → Pop 0
+        // This makes ALL alive enemies render ESP even behind walls.
+        // The Material already uses _ZTest=Always so it draws on top.
+        let hasVisible = activeSlots.contains("esp_visible")
+        if hasVisible && (hasBox || hasLine) {
+            writeI32(0x0CDA, 160) // Pop (consume IsVisible bool)
+            writeI32(0x0CDA + 4, 0)
+        }
+
         return Data(b)
     }
 }
