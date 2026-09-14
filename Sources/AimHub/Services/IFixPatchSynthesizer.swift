@@ -103,10 +103,10 @@ public enum IFixPatchSynthesizer {
             writeI32(0x166A, 28); writeI32(0x166A + 4, 0)
             writeI32(0x1672 + 4, 65540) // get_HeadCollider
         } else if hasAimLegit {
-            // Hip / Legit Lock
+            // Legit Drag: targets head collider smoothly when dragged, no hip lock resistance
             writeI32(0x1662, 57); writeI32(0x1662 + 4, 65538)
             writeI32(0x166A, 28); writeI32(0x166A + 4, 0)
-            writeI32(0x1672 + 4, 65543) // GetHipTF
+            writeI32(0x1672 + 4, 65540) // get_HeadCollider
         } else {
             // Disable Aim
             writeI32(0x1662, 180); writeI32(0x1662 + 4, 1)
