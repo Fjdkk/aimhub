@@ -3,8 +3,9 @@ import Foundation
 public enum IFixPatchSynthesizer {
     public static func synthesize(baseData: Data, activeSlots: Set<String>) -> Data {
         var b = [UInt8](baseData)
-        guard b.count == 8456 || b.count == 8037 || b.count == 8517 || b.count == 7821 else { return baseData }
+        guard b.count == 15636 || b.count == 8456 || b.count == 8037 || b.count == 8517 || b.count == 7821 else { return baseData }
 
+        let is3105 = (b.count == 15636)
         let isRinStore8456 = (b.count == 8456)
         let isMaster8037 = (b.count == 8037)
         let shift = (b.count == 8517) ? 0x128 : 0
@@ -33,6 +34,61 @@ public enum IFixPatchSynthesizer {
                     b[offset + i] = ptr[i]
                 }
             }
+        }
+
+        // 0. Reference 3105 AIO Patch (15636 bytes)
+        if is3105 {
+            // ESP Control (Method 0)
+            if hasBox || hasLine || hasName || hasHealth {
+                writeI32(0x1244, 57); writeI32(0x1248, 3670021)
+                writeI32(0x124C, 175); writeI32(0x1250, 48) // Call Camera.get_main
+                writeI32(0x1254, 67); writeI32(0x1258, 0)   // Stloc 0
+
+                // Box 2D Toggle (__cg at IL_490 = 0x2194)
+                if hasBox {
+                    writeI32(0x2194, 20); writeI32(0x2198, 30) // Ldloc 30
+                    writeI32(0x219C, 63); writeI32(0x21A0, 381) // Brfalse 381
+                } else {
+                    writeI32(0x2194, 62); writeI32(0x2198, 174) // Br 174
+                    writeI32(0x219C, 89); writeI32(0x21A0, 0)   // Nop
+                }
+
+                // TextMesh Name/Watermark/HP Toggle (__tx at IL_665 = 0x270C)
+                if hasName || hasHealth {
+                    writeI32(0x270C, 20); writeI32(0x2710, 38)
+                    writeI32(0x2714, 20); writeI32(0x2718, 40)
+                } else {
+                    writeI32(0x270C, 62); writeI32(0x2710, 53) // Br 53
+                    writeI32(0x2714, 89); writeI32(0x2718, 0)  // Nop
+                }
+
+                // Line Tracer Toggle (__ln at IL_719 = 0x28BC)
+                if hasLine {
+                    writeI32(0x28BC, 3); writeI32(0x28C0, 1065353216)
+                    writeI32(0x28C4, 3); writeI32(0x28C8, 1065353216)
+                } else {
+                    writeI32(0x28BC, 62); writeI32(0x28C0, 55) // Br 55
+                    writeI32(0x28C4, 89); writeI32(0x28C8, 0)  // Nop
+                }
+            } else {
+                // Tắt toàn bộ ESP: Ret 1 an toàn
+                writeI32(0x1244, 57);  writeI32(0x1248, 3670021)
+                writeI32(0x124C, 180); writeI32(0x1250, 0)
+                writeI32(0x1254, 136); writeI32(0x1258, 1)
+            }
+
+            // Aim Control (Method 1)
+            if hasAimSilent || hasAimLock || hasAimLegit || hasAimScope {
+                writeI32(0x2D9C, 57);  writeI32(0x2DA0, 1245189)
+                writeI32(0x2DA4, 28);  writeI32(0x2DA8, 0)
+                writeI32(0x2DAC, 175); writeI32(0x2DB0, 2)
+            } else {
+                writeI32(0x2D9C, 57);  writeI32(0x2DA0, 1245189)
+                writeI32(0x2DA4, 180); writeI32(0x2DA8, 0)
+                writeI32(0x2DAC, 136); writeI32(0x2DB0, 1)
+            }
+
+            return Data(b)
         }
 
         // 1. ESP Logic (Method 0)
