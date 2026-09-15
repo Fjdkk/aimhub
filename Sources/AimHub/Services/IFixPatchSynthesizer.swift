@@ -85,7 +85,6 @@ public enum IFixPatchSynthesizer {
                 writeI32(0x0BA7, 180); writeI32(0x0BAB, 0) // Ldc_I4 0
                 writeI32(0x0BAF, 136); writeI32(0x0BB3, 1) // Ret 1
             }
-        }
         } else if isMaster8037 {
             if hasBox && hasLine {
                 writeI32(0x0B32, 57); writeI32(0x0B36, 1310728)
