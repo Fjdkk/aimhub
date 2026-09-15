@@ -124,20 +124,24 @@ public enum IFixPatchSynthesizer {
                 writeI32(0x0B3A, 28); writeI32(0x0B3E, 0)
 
                 writeI32(0x12DE, 0)
-                writeI32(0x12F6, 7)
+                writeI32(0x12F6, 4)
 
                 writeI32(0x142E, 981668463)
                 writeI32(0x1456, 981668463)
 
+                // Điểm 0 (Đỉnh mép trên màn hình): X=loc 9, Y=1.0f
                 writeI32(0x1482, 20); writeI32(0x1486, 9)
-                writeI32(0x148A, 3);  writeI32(0x148E, 1065353216) // Ldc_R4 1.0f (mép trên màn hình)
+                writeI32(0x148A, 3);  writeI32(0x148E, 1065353216)
 
+                // Điểm 1 (Đầu địch): X=loc 9, Y=loc 7
                 writeI32(0x14CA, 20); writeI32(0x14CE, 9)
                 writeI32(0x14D2, 20); writeI32(0x14D6, 7)
 
+                // Điểm 2 (Góc trên trái Box): X=loc 11, Y=loc 7
                 writeI32(0x1512, 20); writeI32(0x1516, 11)
                 writeI32(0x151A, 20); writeI32(0x151E, 7)
 
+                // Điểm 3 (Góc dưới trái Box): X=loc 11, Y=loc 6
                 writeI32(0x155A, 20); writeI32(0x155E, 11)
                 writeI32(0x1562, 20); writeI32(0x1566, 6)
             } else if hasLine {
@@ -190,7 +194,7 @@ public enum IFixPatchSynthesizer {
                 writeI32(0x12F2 + shift + 4, 2)
 
                 writeI32(0x1482 + shift, 20); writeI32(0x1482 + shift + 4, 9)
-                writeI32(0x148A + shift, 3);  writeI32(0x148A + shift + 4, 1148846080)
+                writeI32(0x148A + shift, 3);  writeI32(0x148A + shift + 4, 1065353216) // Ldc_R4 1.0f (mép trên màn hình, fix từ 1000f cũ)
 
                 writeI32(0x14CA + shift, 20); writeI32(0x14CA + shift + 4, 9)
                 writeI32(0x14D2 + shift, 20); writeI32(0x14D2 + shift + 4, 7)
