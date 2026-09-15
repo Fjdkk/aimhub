@@ -38,86 +38,54 @@ public enum IFixPatchSynthesizer {
         // 1. ESP Logic (Method 0)
         if isRinStore8456 {
             if hasBox || hasLine {
-                // Khôi phục Method 0 header nếu bật ESP
+                // Method 0 header: StackSpace 1310728, Ldarg 0
                 writeI32(0x0B9F, 57); writeI32(0x0BA3, 1310728)
                 writeI32(0x0BA7, 28); writeI32(0x0BAB, 0)
 
-                if hasBox && hasLine {
-                    // DUAL MODE: Vẽ cả Line Laser lẫn Khung Box 2D
-                    writeI32(0x13BB, 0) // loop = 0 (false)
-                    writeI32(0x13D3, 7) // positionCount = 7
-                    writeI32(0x150B, 981668463) // 0.0012f nét laser
-                    writeI32(0x1533, 981668463)
+                if hasBox {
+                    // Chuẩn dev gốc: ESP Box 2D 4 điểm khép kín tuyệt đối
+                    writeI32(0x13BB, 1) // loop = 1 (khép kín)
+                    writeI32(0x13D3, 4) // positionCount = 4
+                    writeI32(0x150B, 984285184) // 0.0015f nét đẹp
+                    writeI32(0x1533, 984285184)
 
-                    // Điểm 0 (Đỉnh mép trên màn hình): X=loc 9 (bám địch), Y=1.0f (mép trên màn hình)
-                    writeI32(0x155F, 20); writeI32(0x1563, 9)
-                    writeI32(0x1567, 3);  writeI32(0x156B, 1065353216) // Ldc_R4 1.0f (mép trên, xoay cam mượt mà 100%)
+                    // Điểm 0: Dưới-Trái (loc 11, loc 6)
+                    writeI32(0x155F, 20); writeI32(0x1563, 11)
+                    writeI32(0x1567, 20); writeI32(0x156B, 6)
 
-                    // Điểm 1 (Đầu địch): X=loc 9, Y=loc 7
-                    writeI32(0x15A7, 20); writeI32(0x15AB, 9)
+                    // Điểm 1: Trên-Trái (loc 11, loc 7)
+                    writeI32(0x15A7, 20); writeI32(0x15AB, 11)
                     writeI32(0x15AF, 20); writeI32(0x15B3, 7)
 
-                    // Điểm 2 (Góc trên trái Box): X=loc 11, Y=loc 7
-                    writeI32(0x15EF, 20); writeI32(0x15F3, 11)
+                    // Điểm 2: Trên-Phải (loc 12, loc 7)
+                    writeI32(0x15EF, 20); writeI32(0x15F3, 12)
                     writeI32(0x15F7, 20); writeI32(0x15FB, 7)
 
-                    // Điểm 3 (Góc dưới trái Box): X=loc 11, Y=loc 6
-                    writeI32(0x1637, 20); writeI32(0x163B, 11)
+                    // Điểm 3: Dưới-Phải (loc 12, loc 6)
+                    writeI32(0x1637, 20); writeI32(0x163B, 12)
                     writeI32(0x163F, 20); writeI32(0x1643, 6)
-
-                    // Điểm 4 (Góc dưới phải Box): X=loc 12, Y=loc 6
-                    writeI32(0x167F, 20); writeI32(0x1683, 12)
-                    writeI32(0x1687, 20); writeI32(0x168B, 6)
-
-                    // Điểm 5 (Góc trên phải Box): X=loc 12, Y=loc 7
-                    writeI32(0x16C7, 20); writeI32(0x16CB, 12)
-                    writeI32(0x16CF, 20); writeI32(0x16D3, 7)
-
-                    // Điểm 6 (Khép kín về góc trên trái Box): X=loc 11, Y=loc 7
-                    writeI32(0x170F, 20); writeI32(0x1713, 11)
-                    writeI32(0x1717, 20); writeI32(0x171B, 7)
-                } else if hasLine {
-                    // Chỉ bật ESP Line
+                } else {
+                    // Chỉ bật ESP Line: 2 điểm (Từ đỉnh màn hình xuống đầu địch)
                     writeI32(0x13BB, 0) // loop = 0
                     writeI32(0x13D3, 2) // positionCount = 2
                     writeI32(0x150B, 981668463) // 0.0012f
                     writeI32(0x1533, 981668463)
 
-                    // Điểm 0 (Đỉnh mép trên màn hình): X=loc 9, Y=1.0f
+                    // Điểm 0 (Đỉnh đầu địch trên cao): X=loc 9, Y=loc 7
                     writeI32(0x155F, 20); writeI32(0x1563, 9)
-                    writeI32(0x1567, 3);  writeI32(0x156B, 1065353216)
+                    writeI32(0x1567, 20); writeI32(0x156B, 7)
 
-                    // Điểm 1 (Đầu địch): X=loc 9, Y=loc 7
+                    // Điểm 1 (Gốc thân địch): X=loc 9, Y=loc 6
                     writeI32(0x15A7, 20); writeI32(0x15AB, 9)
-                    writeI32(0x15AF, 20); writeI32(0x15B3, 7)
-                } else if hasBox {
-                    // Chỉ bật ESP Box 2D
-                    writeI32(0x13BB, 1) // loop = 1
-                    writeI32(0x13D3, 4) // positionCount = 4
-                    writeI32(0x150B, 984285184) // 0.0015f
-                    writeI32(0x1533, 984285184)
-
-                    // Điểm 0: Dưới-Trái
-                    writeI32(0x155F, 20); writeI32(0x1563, 11)
-                    writeI32(0x1567, 20); writeI32(0x156B, 6)
-
-                    // Điểm 1: Trên-Trái
-                    writeI32(0x15A7, 20); writeI32(0x15AB, 11)
-                    writeI32(0x15AF, 20); writeI32(0x15B3, 7)
-
-                    // Điểm 2: Trên-Phải
-                    writeI32(0x15EF, 20); writeI32(0x15F3, 12)
-                    writeI32(0x15F7, 20); writeI32(0x15FB, 7)
-
-                    // Điểm 3: Dưới-Phải
-                    writeI32(0x1637, 20); writeI32(0x163B, 12)
-                    writeI32(0x163F, 20); writeI32(0x1643, 6)
+                    writeI32(0x15AF, 20); writeI32(0x15B3, 6)
                 }
             } else {
-                // Tắt ESP an toàn tuyệt đối: Thoát Method 0 ngay tại đầu phương thức (0x0B9F)
-                writeI32(0x0B9F, 180); writeI32(0x0BA3, 0) // Ldc_I4 0
-                writeI32(0x0BA7, 136); writeI32(0x0BAB, 1) // Ret 1
+                // Tắt ESP an toàn: Giữ StackSpace hợp lệ rồi Ret 1
+                writeI32(0x0B9F, 57);  writeI32(0x0BA3, 1310728)
+                writeI32(0x0BA7, 180); writeI32(0x0BAB, 0) // Ldc_I4 0
+                writeI32(0x0BAF, 136); writeI32(0x0BB3, 1) // Ret 1
             }
+        }
         } else if isMaster8037 {
             if hasBox && hasLine {
                 writeI32(0x0B32, 57); writeI32(0x0B36, 1310728)
@@ -262,9 +230,10 @@ public enum IFixPatchSynthesizer {
             writeI32(m1Start + 8, 28); writeI32(m1Start + 12, 0)
             writeI32(m1Start + 16, 175); writeI32(m1Start + 20, 65540)
         } else {
-            // Tắt Aim
-            writeI32(m1Start, 180); writeI32(m1Start + 4, 1)
-            writeI32(m1Start + 8, 136); writeI32(m1Start + 12, 1)
+            // Tắt Aim an toàn: Giữ nguyên StackSpace 65538 hợp lệ rồi Ret 1
+            writeI32(m1Start, 57);      writeI32(m1Start + 4, 65538)
+            writeI32(m1Start + 8, 180);  writeI32(m1Start + 12, 1) // Ldc_I4 1
+            writeI32(m1Start + 16, 136); writeI32(m1Start + 20, 1) // Ret 1
         }
 
         // 3. ESP Visible (Wallhack) - Luôn hiển thị xuyên tường khi bật ESP
