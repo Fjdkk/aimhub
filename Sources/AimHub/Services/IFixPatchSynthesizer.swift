@@ -123,11 +123,11 @@ public enum IFixPatchSynthesizer {
             writeI32(0x166A + shift, 28); writeI32(0x166A + shift + 4, 0)
             writeI32(0x1672 + shift + 4, 65540) // get_HeadCollider
         } else if hasAimLegit {
-            // Aim Legit: targets hip/body transform (GetHipTF, extern method 7).
-            // Normal shooting centers on enemy chest/body; fingertip swipe glides smoothly to head without hard resistance!
+            // Aim Legit (Dev cũ chuẩn): targets hip/body transform (GetHipTF, extern method 7 = 0x10007 = 65543).
+            // Không bị đơ cam, di chuyển mượt mà, khi đè bắn bám thân địch và vuốt nhẹ lên đầu!
             writeI32(0x1662 + shift, 57); writeI32(0x1662 + shift + 4, 65538)
             writeI32(0x166A + shift, 28); writeI32(0x166A + shift + 4, 0)
-            writeI32(0x1672 + shift + 4, 7) // GetHipTF
+            writeI32(0x1672 + shift + 4, 65543) // GetHipTF (chuẩn dev cũ)
         } else {
             // Disable Aim
             writeI32(0x1662 + shift, 180); writeI32(0x1662 + shift + 4, 1)
