@@ -464,12 +464,12 @@ struct ModListView: View {
 
         Task {
             do {
-                // Tự động tắt bất kỳ mod nào cùng nhóm xung đột (vd: đổi giữa Aim Legit, Aim Lock, Aim Scope)
-                let isAimExclusive = (rule.slot == "aim_legit" || rule.slot == "aim_lock" || rule.slot == "aim_on_scope")
+                // Tự động tắt bất kỳ mod nào cùng nhóm xung đột (vd: đổi giữa Aim Legit, Aim Lock, Aim Scope, Aim Silent)
+                let isAimExclusive = (rule.slot == "aim_legit" || rule.slot == "aim_lock" || rule.slot == "aim_on_scope" || rule.slot == "aim_silent")
                 for other in allRules {
                     guard other.ruleID != rule.ruleID, appState.isModActive(ruleID: other.ruleID) else { continue }
                     let sameGroup = (rule.conflictGroup != nil && rule.conflictGroup == other.conflictGroup)
-                    let isOtherAim = (other.slot == "aim_legit" || other.slot == "aim_lock" || other.slot == "aim_on_scope")
+                    let isOtherAim = (other.slot == "aim_legit" || other.slot == "aim_lock" || other.slot == "aim_on_scope" || other.slot == "aim_silent")
                     if sameGroup || (isAimExclusive && isOtherAim) {
                         try await appState.turnOffMod(other)
                     }

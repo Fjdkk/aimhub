@@ -9,10 +9,12 @@ public enum IFixPatchSynthesizer {
 
         let hasBox = activeSlots.contains("esp_2d_box")
         let hasLine = activeSlots.contains("esp_line")
+        let hasAimSilent = activeSlots.contains("aim_silent")
         let hasAimLock = activeSlots.contains("aim_lock")
         let hasAimLegit = activeSlots.contains("aim_legit")
         let hasAimScope = activeSlots.contains("aim_on_scope")
         let hasHealth = activeSlots.contains("esp_health")
+        let hasName = activeSlots.contains("esp_name")
 
         let hasHighJump = activeSlots.contains("high_jump")
         let hasFastGun = activeSlots.contains("fast_weapon_switch")
@@ -110,16 +112,22 @@ public enum IFixPatchSynthesizer {
         }
 
         // 2. AIM Logic (Method 1 at 0x165E + shift)
-        if hasAimLock || hasAimScope {
-            // Head Lock
+        if hasAimSilent {
+            // Silent Aim: silent trajectory lock to HeadCollider without rotating camera
+            writeI32(0x1662 + shift, 57); writeI32(0x1662 + shift + 4, 65538)
+            writeI32(0x166A + shift, 28); writeI32(0x166A + shift + 4, 0)
+            writeI32(0x1672 + shift + 4, 65540) // get_HeadCollider
+        } else if hasAimLock || hasAimScope {
+            // Aim Lock: snap to head collider directly
             writeI32(0x1662 + shift, 57); writeI32(0x1662 + shift + 4, 65538)
             writeI32(0x166A + shift, 28); writeI32(0x166A + shift + 4, 0)
             writeI32(0x1672 + shift + 4, 65540) // get_HeadCollider
         } else if hasAimLegit {
-            // Legit Drag: targets head collider smoothly when dragged
+            // Aim Legit: targets hip/body transform (GetHipTF, extern method 7).
+            // Normal shooting centers on enemy chest/body; fingertip swipe glides smoothly to head without hard resistance!
             writeI32(0x1662 + shift, 57); writeI32(0x1662 + shift + 4, 65538)
             writeI32(0x166A + shift, 28); writeI32(0x166A + shift + 4, 0)
-            writeI32(0x1672 + shift + 4, 65540) // get_HeadCollider
+            writeI32(0x1672 + shift + 4, 7) // GetHipTF
         } else {
             // Disable Aim
             writeI32(0x1662 + shift, 180); writeI32(0x1662 + shift + 4, 1)
