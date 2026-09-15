@@ -3,8 +3,9 @@ import Foundation
 public enum IFixPatchSynthesizer {
     public static func synthesize(baseData: Data, activeSlots: Set<String>) -> Data {
         var b = [UInt8](baseData)
-        guard b.count == 8037 || b.count == 8517 || b.count == 7821 else { return baseData }
+        guard b.count == 8456 || b.count == 8037 || b.count == 8517 || b.count == 7821 else { return baseData }
 
+        let isRinStore8456 = (b.count == 8456)
         let isMaster8037 = (b.count == 8037)
         let shift = (b.count == 8517) ? 0x128 : 0
 
@@ -35,83 +36,127 @@ public enum IFixPatchSynthesizer {
         }
 
         // 1. ESP Logic (Method 0)
-        if isMaster8037 {
+        if isRinStore8456 {
+            // Master Rin Store (8456 bytes) có nhúng sẵn TextMesh bản quyền "Rin Store" ở sườn trái Box 2D!
             if hasBox && hasLine {
-                // PHƯƠNG ÁN 2: DUAL MODE (Vẽ đồng thời cả Tia Line lẫn Khung Box 2D)
-                // Nối 7 điểm liên tục: Line từ đỉnh màn hình xuống đầu -> bao trọn 4 góc thân Box -> khép kín về đầu
+                // PHƯƠNG ÁN 2: DUAL MODE (Vẽ cả Line Laser lẫn Khung Box 2D có chữ Rin Store)
+                writeI32(0x13BB, 0) // loop = 0 (false)
+                writeI32(0x13D3, 7) // positionCount = 7
+                writeI32(0x150B, 981668463) // 0.0012f nét laser
+                writeI32(0x1533, 981668463)
+
+                // Điểm 0 (Đỉnh màn hình): X=loc 9, Y=1000f
+                writeI32(0x155F, 20); writeI32(0x1563, 9)
+                writeI32(0x1567, 3);  writeI32(0x156B, 1148846080)
+
+                // Điểm 1 (Đầu địch): X=loc 9, Y=loc 7
+                writeI32(0x15A7, 20); writeI32(0x15AB, 9)
+                writeI32(0x15AF, 20); writeI32(0x15B3, 7)
+
+                // Điểm 2 (Góc trên trái Box): X=loc 11, Y=loc 7
+                writeI32(0x15EF, 20); writeI32(0x15F3, 11)
+                writeI32(0x15F7, 20); writeI32(0x15FB, 7)
+
+                // Điểm 3 (Góc dưới trái Box): X=loc 11, Y=loc 6
+                writeI32(0x1637, 20); writeI32(0x163B, 11)
+                writeI32(0x163F, 20); writeI32(0x1643, 6)
+            } else if hasLine {
+                // Chỉ bật ESP Line
+                writeI32(0x13BB, 0) // loop = 0
+                writeI32(0x13D3, 2) // positionCount = 2
+                writeI32(0x150B, 981668463) // 0.0012f
+                writeI32(0x1533, 981668463)
+
+                writeI32(0x155F, 20); writeI32(0x1563, 9)
+                writeI32(0x1567, 3);  writeI32(0x156B, 1148846080)
+                writeI32(0x15A7, 20); writeI32(0x15AB, 9)
+                writeI32(0x15AF, 20); writeI32(0x15B3, 7)
+            } else if hasBox {
+                // Chỉ bật ESP Box 2D (kèm chữ bản quyền Rin Store)
+                writeI32(0x13BB, 1) // loop = 1
+                writeI32(0x13D3, 4) // positionCount = 4
+                writeI32(0x150B, 984285184) // 0.0015f
+                writeI32(0x1533, 984285184)
+
+                // Điểm 0: Dưới-Trái
+                writeI32(0x155F, 20); writeI32(0x1563, 11)
+                writeI32(0x1567, 20); writeI32(0x156B, 6)
+
+                // Điểm 1: Trên-Trái
+                writeI32(0x15A7, 20); writeI32(0x15AB, 11)
+                writeI32(0x15AF, 20); writeI32(0x15B3, 7)
+
+                // Điểm 2: Trên-Phải
+                writeI32(0x15EF, 20); writeI32(0x15F3, 12)
+                writeI32(0x15F7, 20); writeI32(0x15FB, 7)
+
+                // Điểm 3: Dưới-Phải
+                writeI32(0x1637, 20); writeI32(0x163B, 12)
+                writeI32(0x163F, 20); writeI32(0x1643, 6)
+            } else {
+                // Tắt ESP
+                writeI32(0x0C0D, 180); writeI32(0x0C11, 0)
+                writeI32(0x0C15, 136); writeI32(0x0C19, 1)
+            }
+        } else if isMaster8037 {
+            if hasBox && hasLine {
                 writeI32(0x0B32, 57); writeI32(0x0B36, 1310728)
                 writeI32(0x0B3A, 28); writeI32(0x0B3E, 0)
 
-                writeI32(0x12DE, 0) // loop = 0 (false)
-                writeI32(0x12F6, 7) // positionCount = 7
+                writeI32(0x12DE, 0)
+                writeI32(0x12F6, 7)
 
-                // Độ dày chuẩn laser siêu nét (0.0012f)
                 writeI32(0x142E, 981668463)
                 writeI32(0x1456, 981668463)
 
-                // Điểm 0 (Đỉnh màn hình theo trục X của đầu địch): X=loc 9, Y=1000f, Z=loc 15
-                writeI32(0x1482, 20); writeI32(0x1486, 9)
-                writeI32(0x148A, 3);  writeI32(0x148E, 1148846080) // Ldc_R4 1000f
-
-                // Điểm 1 (Đầu địch - Tia Line chạm đầu): X=loc 9, Y=loc 7, Z=loc 15
-                writeI32(0x14CA, 20); writeI32(0x14CE, 9)
-                writeI32(0x14D2, 20); writeI32(0x14D6, 7)
-
-                // Điểm 2 (Góc trên trái Box): X=loc 11, Y=loc 7, Z=loc 15
-                writeI32(0x1512, 20); writeI32(0x1516, 11)
-                writeI32(0x151A, 20); writeI32(0x151E, 7)
-
-                // Điểm 3 (Góc dưới trái Box): X=loc 11, Y=loc 6, Z=loc 15
-                writeI32(0x155A, 20); writeI32(0x155E, 11)
-                writeI32(0x1562, 20); writeI32(0x1566, 6)
-
-                // Điểm 4 (Góc dưới phải), Điểm 5 (Góc trên phải), Điểm 6 (Khép về đầu) đã có sẵn trong Master 8037
-            } else if hasLine {
-                // Chỉ bật ESP Line
-                writeI32(0x0B32, 57); writeI32(0x0B36, 1310728)
-                writeI32(0x0B3A, 28); writeI32(0x0B3E, 0)
-
-                writeI32(0x12DE, 0) // loop = 0
-                writeI32(0x12F6, 2) // positionCount = 2
-
-                writeI32(0x142E, 981668463) // 0.0012f
-                writeI32(0x1456, 981668463)
-
-                // Điểm 0 (Đỉnh màn hình): X=loc 9, Y=1000f
                 writeI32(0x1482, 20); writeI32(0x1486, 9)
                 writeI32(0x148A, 3);  writeI32(0x148E, 1148846080)
 
-                // Điểm 1 (Đầu địch): X=loc 9, Y=loc 7
                 writeI32(0x14CA, 20); writeI32(0x14CE, 9)
                 writeI32(0x14D2, 20); writeI32(0x14D6, 7)
-            } else if hasBox {
-                // Chỉ bật ESP Box 2D
+
+                writeI32(0x1512, 20); writeI32(0x1516, 11)
+                writeI32(0x151A, 20); writeI32(0x151E, 7)
+
+                writeI32(0x155A, 20); writeI32(0x155E, 11)
+                writeI32(0x1562, 20); writeI32(0x1566, 6)
+            } else if hasLine {
                 writeI32(0x0B32, 57); writeI32(0x0B36, 1310728)
                 writeI32(0x0B3A, 28); writeI32(0x0B3E, 0)
 
-                writeI32(0x12DE, 1) // loop = 1
-                writeI32(0x12F6, 4) // positionCount = 4
+                writeI32(0x12DE, 0)
+                writeI32(0x12F6, 2)
 
-                writeI32(0x142E, 984285184) // 0.0015f
+                writeI32(0x142E, 981668463)
+                writeI32(0x1456, 981668463)
+
+                writeI32(0x1482, 20); writeI32(0x1486, 9)
+                writeI32(0x148A, 3);  writeI32(0x148E, 1148846080)
+
+                writeI32(0x14CA, 20); writeI32(0x14CE, 9)
+                writeI32(0x14D2, 20); writeI32(0x14D6, 7)
+            } else if hasBox {
+                writeI32(0x0B32, 57); writeI32(0x0B36, 1310728)
+                writeI32(0x0B3A, 28); writeI32(0x0B3E, 0)
+
+                writeI32(0x12DE, 1)
+                writeI32(0x12F6, 4)
+
+                writeI32(0x142E, 984285184)
                 writeI32(0x1456, 984285184)
 
-                // Điểm 0: Dưới-Trái (loc 11, loc 6)
                 writeI32(0x1482, 20); writeI32(0x1486, 11)
                 writeI32(0x148A, 20); writeI32(0x148E, 6)
 
-                // Điểm 1: Trên-Trái (loc 11, loc 7)
                 writeI32(0x14CA, 20); writeI32(0x14CE, 11)
                 writeI32(0x14D2, 20); writeI32(0x14D6, 7)
 
-                // Điểm 2: Trên-Phải (loc 12, loc 7)
                 writeI32(0x1512, 20); writeI32(0x1516, 12)
                 writeI32(0x151A, 20); writeI32(0x151E, 7)
 
-                // Điểm 3: Dưới-Phải (loc 12, loc 6)
                 writeI32(0x155A, 20); writeI32(0x155E, 12)
                 writeI32(0x1562, 20); writeI32(0x1566, 6)
             } else {
-                // Tắt ESP
                 writeI32(0x0B32, 180); writeI32(0x0B36, 0)
                 writeI32(0x0B3A, 136); writeI32(0x0B3E, 1)
             }
@@ -173,7 +218,15 @@ public enum IFixPatchSynthesizer {
         }
 
         // 2. AIM Logic (Method 1)
-        let m1Start = isMaster8037 ? 0x173A : (0x1662 + shift)
+        let m1Start: Int
+        if isRinStore8456 {
+            m1Start = 0x1817
+        } else if isMaster8037 {
+            m1Start = 0x173A
+        } else {
+            m1Start = 0x1662 + shift
+        }
+
         if hasAimLegit || hasAimSilent {
             // GetHipTF (65543) - Chuẩn dev cũ: Bám thân mượt mà, di chuyển tự do 100%, không bị đơ giật cam
             writeI32(m1Start, 57); writeI32(m1Start + 4, 65538)
@@ -192,16 +245,18 @@ public enum IFixPatchSynthesizer {
 
         // 3. ESP Visible (Wallhack) - Luôn hiển thị xuyên tường khi bật ESP
         if hasBox || hasLine {
-            writeI32(0x0CDA + shift, 160) // Pop (bỏ qua check vật cản che khuất)
-            writeI32(0x0CDA + shift + 4, 0)
+            let visOffset = isRinStore8456 ? 0x0D4B : (0x0CDA + shift)
+            writeI32(visOffset, 160)
+            writeI32(visOffset + 4, 0)
         }
 
         // 4. ESP Health (Màu thanh máu)
         if hasHealth && (hasBox || hasLine) {
-            writeI32(0x136A + shift + 4, 0) // R = 0f
-            writeI32(0x1372 + shift + 4, 1065353216) // G = 1f
-            writeI32(0x137A + shift + 4, 0) // B = 0f
-            writeI32(0x1382 + shift + 4, 1065353216) // A = 1f
+            let colOffset = isRinStore8456 ? 0x144B : (0x136A + shift)
+            writeI32(colOffset + 4, 0) // R = 0f
+            writeI32(colOffset + 12, 1065353216) // G = 1f
+            writeI32(colOffset + 20, 0) // B = 0f
+            writeI32(colOffset + 28, 1065353216) // A = 1f
         }
 
         // 5. Multi-Feature Handlers (if 8517 bytes patch)
