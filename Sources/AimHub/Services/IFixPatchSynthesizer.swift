@@ -7,7 +7,7 @@ public enum IFixPatchSynthesizer {
 
         let is3105 = (b.count == 15636)
         let isRinStore8456 = (b.count == 8456)
-        let isMaster8037 = (b.count == 8037)
+        let isMaster8037 = (b.count == 8037 || b.count == 7821)
         let shift = (b.count == 8517) ? 0x128 : 0
 
         let hasBox = activeSlots.contains("esp_2d_box")
@@ -209,7 +209,7 @@ public enum IFixPatchSynthesizer {
         if isRinStore8456 {
             m1Start = 0x1817
         } else if isMaster8037 {
-            m1Start = 0x173A
+            m1Start = (b.count == 7821) ? 0x1662 : 0x173A
         } else {
             m1Start = 0x1662 + shift
         }
