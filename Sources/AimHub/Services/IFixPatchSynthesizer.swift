@@ -230,8 +230,12 @@ public enum IFixPatchSynthesizer {
             }
         } else {
             // Chuẩn 7821 và 8517 bytes patch:
-            if hasAimLegit || hasAimLock || hasAimSilent || hasAimScope {
-                // Khôi phục trọn vẹn 11 lệnh gốc của Method 1 (Player::get_IsMovableEntity)
+            // Method 1 nguyên bản gồm 11 lệnh (88 bytes) - TUYỆT ĐỐI KHÔNG RÚT GỌN 3 LỆNH GÂY LỖI VM!
+            if hasAimLock || hasAimScope {
+                // Aim Head Lock: đổi mục tiêu sang HeadCollider (65540)
+                writeI32(m1Start + 20, 65540)
+            } else {
+                // Giữ nguyên 11 lệnh gốc của dev (GetHipTF 65543)
                 let origM1: [Int32] = [
                     57, 65538,    // StackSpace 65538
                     28, 0,        // Ldarg 0
@@ -248,11 +252,6 @@ public enum IFixPatchSynthesizer {
                 for (i, v) in origM1.enumerated() {
                     writeI32(m1Start + i * 4, v)
                 }
-            } else {
-                // Tắt Aim an toàn: Giữ StackSpace 65538, trả về true chuẩn bool (Ldc_I4 1; Ret 1)
-                writeI32(m1Start, 57);      writeI32(m1Start + 4, 65538)
-                writeI32(m1Start + 8, 180);  writeI32(m1Start + 12, 1) // Ldc_I4 1
-                writeI32(m1Start + 16, 136); writeI32(m1Start + 20, 1) // Ret 1
             }
         }
 

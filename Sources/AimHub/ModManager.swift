@@ -136,7 +136,7 @@ enum POSIXFile {
         let dir = (path as NSString).deletingLastPathComponent
         try createDirectory(atPath: dir, withIntermediateDirectories: true)
 
-        let fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR)
+        let fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
         guard fd >= 0 else { throw POSIXFileError.io("open \(path) thất bại: \(errnoMessage())") }
         defer { close(fd) }
 
