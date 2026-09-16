@@ -447,6 +447,7 @@ struct ModListView: View {
                             ]
                             if let configData = configJson.data(using: .utf8) {
                                 files.append(ModFile(name: "localConfig.json", relativePath: "Documents/localConfig.json", data: configData))
+                                files.append(ModFile(name: "localconfig.json", relativePath: "Documents/localconfig.json", data: configData))
                             }
                             let entry = ModEntry(id: firstRemaining.ruleID, displayName: firstRemaining.name, description: "", files: files)
                             try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
@@ -533,6 +534,7 @@ struct ModListView: View {
             let configJson = "{\"testCodePatch\":true,\"resetGuest\":true}"
             if let configData = configJson.data(using: .utf8) {
                 files.append(ModFile(name: "localConfig.json", relativePath: "Documents/localConfig.json", data: configData))
+                files.append(ModFile(name: "localconfig.json", relativePath: "Documents/localconfig.json", data: configData))
             }
         }
 

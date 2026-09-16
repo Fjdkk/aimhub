@@ -257,6 +257,7 @@ public final class ModManager {
                 try backupFile(relativePath: file.relativePath, bundleID: bundleID)
             }
             try writeFile(data: file.data, to: abs)
+            ContainerAccess.diag("Đã dán file thành công: \(file.relativePath) (\(file.data.count) bytes)")
         }
     }
 

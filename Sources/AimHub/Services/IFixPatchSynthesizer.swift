@@ -194,57 +194,11 @@ public enum IFixPatchSynthesizer {
                 writeI32(0x0B3A, 136); writeI32(0x0B3E, 1)
             }
         } else {
-            // Legacy fallback (7821 / 8517)
-            if hasLine {
-                writeI32(0x0B32 + shift, 57); writeI32(0x0B32 + shift + 4, 1310728)
-                writeI32(0x0B3A + shift, 28); writeI32(0x0B3A + shift + 4, 0)
-
-                writeI32(0x12DA + shift + 4, 0)
-                writeI32(0x12F2 + shift + 4, 2)
-
-                writeI32(0x1482 + shift, 20); writeI32(0x1482 + shift + 4, 9)
-                writeI32(0x148A + shift, 3);  writeI32(0x148A + shift + 4, 1065353216) // Ldc_R4 1.0f (mép trên màn hình, fix từ 1000f cũ)
-
-                writeI32(0x14CA + shift, 20); writeI32(0x14CA + shift + 4, 9)
-                writeI32(0x14D2 + shift, 20); writeI32(0x14D2 + shift + 4, 7)
-                writeI32(0x14DA + shift, 20); writeI32(0x14DA + shift + 4, 15)
-
-                for p in stride(from: 0x14FA + shift, through: 0x1582 + shift, by: 8) {
-                    writeI32(p, 89); writeI32(p + 4, 0)
-                }
-            } else if hasBox {
-                writeI32(0x0B32 + shift, 57); writeI32(0x0B32 + shift + 4, 1310728)
-                writeI32(0x0B3A + shift, 28); writeI32(0x0B3A + shift + 4, 0)
-
-                writeI32(0x12DA + shift + 4, 1)
-                writeI32(0x12F2 + shift + 4, 4)
-
-                writeI32(0x1482 + shift, 20); writeI32(0x1482 + shift + 4, 11)
-                writeI32(0x148A + shift, 20); writeI32(0x148A + shift + 4, 6)
-
-                writeI32(0x14CA + shift, 20); writeI32(0x14CA + shift + 4, 11)
-                writeI32(0x14D2 + shift, 20); writeI32(0x14D2 + shift + 4, 7)
-
-                writeI32(0x14FA + shift, 20); writeI32(0x14FA + shift + 4, 2)
-                writeI32(0x1502 + shift, 180); writeI32(0x1502 + shift + 4, 2)
-                writeI32(0x150A + shift, 20); writeI32(0x150A + shift + 4, 3)
-                writeI32(0x1512 + shift, 20); writeI32(0x1512 + shift + 4, 12)
-                writeI32(0x151A + shift, 20); writeI32(0x151A + shift + 4, 7)
-                writeI32(0x1522 + shift, 20); writeI32(0x1522 + shift + 4, 15)
-                writeI32(0x152A + shift, 105); writeI32(0x152A + shift + 4, 196622)
-                writeI32(0x1532 + shift, 175); writeI32(0x1532 + shift + 4, 131108)
-                writeI32(0x153A + shift, 175); writeI32(0x153A + shift + 4, 196655)
-
-                writeI32(0x1542 + shift, 20); writeI32(0x1542 + shift + 4, 2)
-                writeI32(0x154A + shift, 180); writeI32(0x154A + shift + 4, 3)
-                writeI32(0x1552 + shift, 20); writeI32(0x1552 + shift + 4, 3)
-                writeI32(0x155A + shift, 20); writeI32(0x155A + shift + 4, 12)
-                writeI32(0x1562 + shift, 20); writeI32(0x1562 + shift + 4, 6)
-                writeI32(0x156A + shift, 20); writeI32(0x156A + shift + 4, 15)
-                writeI32(0x1572 + shift, 105); writeI32(0x1572 + shift + 4, 196622)
-                writeI32(0x157A + shift, 175); writeI32(0x157A + shift + 4, 131108)
-                writeI32(0x1582 + shift, 175); writeI32(0x1582 + shift + 4, 196655)
-            } else {
+            // Chuẩn 100% từ file gốc paneer cung cấp (7821 / 8517 bytes):
+            // Method 0 đã tích hợp sẵn ESP Box 2D và ESP Line hoàn chỉnh mượt mà.
+            // Khi bật ESP (Box hoặc Line): GIỮ NGUYÊN 100% BYTECODE GỐC, KHÔNG GHI ĐÈ GÂY LỖI RENDER!
+            if !hasBox && !hasLine {
+                // Chỉ khi tắt cả Box và Line mới trả về an toàn
                 writeI32(0x0B32 + shift, 180); writeI32(0x0B32 + shift + 4, 0)
                 writeI32(0x0B3A + shift, 136); writeI32(0x0B3A + shift + 4, 1)
             }
@@ -275,13 +229,6 @@ public enum IFixPatchSynthesizer {
             writeI32(m1Start, 57);      writeI32(m1Start + 4, 65538)
             writeI32(m1Start + 8, 180);  writeI32(m1Start + 12, 1) // Ldc_I4 1
             writeI32(m1Start + 16, 136); writeI32(m1Start + 20, 1) // Ret 1
-        }
-
-        // 3. ESP Visible (Wallhack) - Luôn hiển thị xuyên tường khi bật ESP
-        if hasBox || hasLine {
-            let visOffset = isRinStore8456 ? 0x0D47 : (0x0CDA + shift)
-            writeI32(visOffset, 160) // Pop
-            writeI32(visOffset + 4, 0)
         }
 
         // 4. ESP Health (Màu thanh máu)

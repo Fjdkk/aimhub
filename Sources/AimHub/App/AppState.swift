@@ -220,8 +220,8 @@ final class AppState: ObservableObject {
         
         var current = activeMods
 
-        // 1. Nếu mode là replace (thay thế file game gốc), chỉ cho phép 1 mod trên cùng destination
-        if mode == "replace" {
+        // 1. Nếu mode là replace (thay thế file game gốc), chỉ cho phép 1 mod trên cùng destination (ngoại trừ file patch AIO Assembly-CSharp-patch.bytes)
+        if mode == "replace" && !dest.contains("Assembly-CSharp-patch.bytes") {
             let conflicting = current.values.filter { $0.destination == dest && $0.ruleID != rule.ruleID }
             for old in conflicting {
                 try? ModManager.shared.restoreFile(relativePath: dest, bundleID: game.bundleID, mode: mode)
