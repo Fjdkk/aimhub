@@ -214,21 +214,46 @@ public enum IFixPatchSynthesizer {
             m1Start = 0x1662 + shift
         }
 
-        if hasAimLegit || hasAimSilent {
-            // GetHipTF (65543) - Chuẩn dev cũ: Bám thân mượt mà, di chuyển tự do 100%, không bị đơ giật cam
-            writeI32(m1Start, 57); writeI32(m1Start + 4, 65538)
-            writeI32(m1Start + 8, 28); writeI32(m1Start + 12, 0)
-            writeI32(m1Start + 16, 175); writeI32(m1Start + 20, 65543)
-        } else if hasAimLock || hasAimScope {
-            // Head Collider (65540) - Khóa trực diện đầu
-            writeI32(m1Start, 57); writeI32(m1Start + 4, 65538)
-            writeI32(m1Start + 8, 28); writeI32(m1Start + 12, 0)
-            writeI32(m1Start + 16, 175); writeI32(m1Start + 20, 65540)
+        if isRinStore8456 || isMaster8037 {
+            if hasAimLegit || hasAimSilent {
+                writeI32(m1Start, 57); writeI32(m1Start + 4, 65538)
+                writeI32(m1Start + 8, 28); writeI32(m1Start + 12, 0)
+                writeI32(m1Start + 16, 175); writeI32(m1Start + 20, 65543)
+            } else if hasAimLock || hasAimScope {
+                writeI32(m1Start, 57); writeI32(m1Start + 4, 65538)
+                writeI32(m1Start + 8, 28); writeI32(m1Start + 12, 0)
+                writeI32(m1Start + 16, 175); writeI32(m1Start + 20, 65540)
+            } else {
+                writeI32(m1Start, 57);      writeI32(m1Start + 4, 65538)
+                writeI32(m1Start + 8, 180);  writeI32(m1Start + 12, 1)
+                writeI32(m1Start + 16, 136); writeI32(m1Start + 20, 1)
+            }
         } else {
-            // Tắt Aim an toàn: Giữ nguyên StackSpace 65538 hợp lệ rồi Ret 1
-            writeI32(m1Start, 57);      writeI32(m1Start + 4, 65538)
-            writeI32(m1Start + 8, 180);  writeI32(m1Start + 12, 1) // Ldc_I4 1
-            writeI32(m1Start + 16, 136); writeI32(m1Start + 20, 1) // Ret 1
+            // Chuẩn 7821 và 8517 bytes patch:
+            if hasAimLegit || hasAimLock || hasAimSilent || hasAimScope {
+                // Khôi phục trọn vẹn 11 lệnh gốc của Method 1 (Player::get_IsMovableEntity)
+                let origM1: [Int32] = [
+                    57, 65538,    // StackSpace 65538
+                    28, 0,        // Ldarg 0
+                    175, 65543,   // Call 65543 (GetHipTF)
+                    176, 0,       // Pop
+                    20, 0,        // Ldloc 0
+                    62, 4,        // Brfalse 4
+                    28, 0,        // Ldarg 0
+                    20, 0,        // Ldloc 0
+                    175, 131077,  // Callvirt 131077
+                    180, 1,       // Ldc_I4 1
+                    136, 1        // Ret 1
+                ]
+                for (i, v) in origM1.enumerated() {
+                    writeI32(m1Start + i * 4, v)
+                }
+            } else {
+                // Tắt Aim an toàn: Giữ StackSpace 65538, trả về true chuẩn bool (Ldc_I4 1; Ret 1)
+                writeI32(m1Start, 57);      writeI32(m1Start + 4, 65538)
+                writeI32(m1Start + 8, 180);  writeI32(m1Start + 12, 1) // Ldc_I4 1
+                writeI32(m1Start + 16, 136); writeI32(m1Start + 20, 1) // Ret 1
+            }
         }
 
         // 4. ESP Health (Màu thanh máu)
