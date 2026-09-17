@@ -74,7 +74,7 @@ public enum IFixPatchSynthesizer {
                 writeI32(0x2320, 136); writeI32(0x2324, 1)     // Ret 1
             } else {
                 // BẬT AIM:
-                // Method 1: Luôn gọi set_LockedAimingCollider
+                // Method 1: Gọi set_LockedAimingCollider
                 writeI32(0x2168, 57);  writeI32(0x216C, 65538)
                 writeI32(0x2170, 28);  writeI32(0x2174, 0)
                 writeI32(0x2210, 42);  writeI32(0x2214, 0)
@@ -87,13 +87,16 @@ public enum IFixPatchSynthesizer {
                 writeI32(0x2320, 176); writeI32(0x2324, 0)
 
                 if hasAimLock {
-                    // Khóa cứng đầu: factor = 0.0f
+                    // Aim Lock: chỏ thẳng vào đầu (HeadCollider 65540), khóa cứng factor = 0.0f
+                    writeI32(0x2178 + 4, 65540)
                     writeI32(0x2398, 3); writeI32(0x239C, 0)
                     writeI32(0x23C8, 3); writeI32(0x23CC, 0)
                 } else {
-                    // Aim Legit / Silent: factor = 0.75f (kéo tâm mượt)
-                    writeI32(0x2398, 3); writeI32(0x239C, 1061158912)
-                    writeI32(0x23C8, 3); writeI32(0x23CC, 1061158912)
+                    // Aim Legit: trợ lực ngắm vùng thân/ngực (GetHipTF 65543 - không chỏ sát đầu)
+                    // và giảm tối đa lực cản (factor = 0.85f) giúp ngón tay vuốt kéo tâm lên cực nhẹ và mượt
+                    writeI32(0x2178 + 4, 65543)
+                    writeI32(0x2398, 3); writeI32(0x239C, 1063004406) // 0.85f
+                    writeI32(0x23C8, 3); writeI32(0x23CC, 1063004406)
                 }
             }
 
