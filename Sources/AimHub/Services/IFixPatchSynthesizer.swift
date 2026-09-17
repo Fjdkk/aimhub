@@ -7,7 +7,9 @@ public enum IFixPatchSynthesizer {
 
         // Nếu file từ server đã là bản cấu hình hoàn chỉnh hoặc kích thước động từ server:
         // Cho phép áp dụng trực tiếp mọi bản vá tải từ server xuống mà không cần build lại app
-        if b.count != 15636 && b.count != 8456 && b.count != 8037 && b.count != 8517 && b.count != 7821 {
+        let is11k = (b.count >= 11400 && b.count <= 11550)
+        let isKnownSize = (b.count == 15636 || b.count == 8456 || b.count == 8037 || b.count == 8517 || b.count == 7821 || is11k)
+        if !isKnownSize {
             return Data(b)
         }
 
@@ -34,12 +36,68 @@ public enum IFixPatchSynthesizer {
         let hasUnlimitedAmmo = activeSlots.contains("double_gun") || activeSlots.contains("fast_reload")
 
         func writeI32(_ offset: Int, _ val: Int32) {
+            guard offset >= 0 && offset + 4 <= b.count else { return }
             var v = val.littleEndian
             withUnsafeBytes(of: &v) { ptr in
                 for i in 0..<4 {
                     b[offset + i] = ptr[i]
                 }
             }
+        }
+
+        // -1. Dev 11k Base Patch (11400...11550 bytes: ESP Box/Line + Aim Legit/Lock)
+        if is11k {
+            // ESP Control (Method 0 at 0x1050)
+            if !hasBox && !hasLine {
+                // Tắt sạch ESP: Ldc_I4 0, Ret 1
+                writeI32(0x1050, 180); writeI32(0x1054, 0)
+                writeI32(0x1058, 136); writeI32(0x105C, 1)
+            } else {
+                // Bật ESP: StackSpace 3080208, Call 51
+                writeI32(0x1050, 57);  writeI32(0x1054, 3080208)
+                writeI32(0x1058, 175); writeI32(0x105C, 51)
+            }
+
+            // Aim Control (Method 1 at 0x2168, Method 3 at 0x2300)
+            let hasAnyAim = hasAimSilent || hasAimLock || hasAimLegit || hasAimScope
+            if !hasAnyAim {
+                // TẮT AIM:
+                // Method 1: Ldc_I4 1, Ret 1
+                writeI32(0x2168, 180); writeI32(0x216C, 1)
+                writeI32(0x2170, 136); writeI32(0x2174, 1)
+
+                // Method 3: Trả về vị trí hông tự nhiên
+                writeI32(0x2300, 57);  writeI32(0x2304, 262152)
+                writeI32(0x2308, 28);  writeI32(0x230C, 0)
+                writeI32(0x2310, 175); writeI32(0x2314, 65594) // GetHipTF
+                writeI32(0x2318, 175); writeI32(0x231C, 65545) // get_position
+                writeI32(0x2320, 136); writeI32(0x2324, 1)     // Ret 1
+            } else {
+                // BẬT AIM:
+                // Method 1: Luôn gọi set_LockedAimingCollider
+                writeI32(0x2168, 57);  writeI32(0x216C, 65538)
+                writeI32(0x2170, 28);  writeI32(0x2174, 0)
+                writeI32(0x2210, 42);  writeI32(0x2214, 0)
+
+                // Method 3: Khôi phục cấu trúc ngắm gốc
+                writeI32(0x2300, 57);  writeI32(0x2304, 262152)
+                writeI32(0x2308, 28);  writeI32(0x230C, 0)
+                writeI32(0x2310, 175); writeI32(0x2314, 65537)
+                writeI32(0x2318, 175); writeI32(0x231C, 65545)
+                writeI32(0x2320, 176); writeI32(0x2324, 0)
+
+                if hasAimLock {
+                    // Khóa cứng đầu: factor = 0.0f
+                    writeI32(0x2398, 3); writeI32(0x239C, 0)
+                    writeI32(0x23C8, 3); writeI32(0x23CC, 0)
+                } else {
+                    // Aim Legit / Silent: factor = 0.75f (kéo tâm mượt)
+                    writeI32(0x2398, 3); writeI32(0x239C, 1061158912)
+                    writeI32(0x23C8, 3); writeI32(0x23CC, 1061158912)
+                }
+            }
+
+            return Data(b)
         }
 
         // 0. Reference 3105 AIO Patch (15636 bytes)
