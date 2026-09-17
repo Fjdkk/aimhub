@@ -3,7 +3,13 @@ import Foundation
 public enum IFixPatchSynthesizer {
     public static func synthesize(baseData: Data, activeSlots: Set<String>) -> Data {
         var b = [UInt8](baseData)
-        guard b.count == 15636 || b.count == 8456 || b.count == 8037 || b.count == 8517 || b.count == 7821 else { return baseData }
+        guard b.count > 100 else { return baseData }
+
+        // Nếu file từ server đã là bản cấu hình hoàn chỉnh hoặc kích thước động từ server:
+        // Cho phép áp dụng trực tiếp mọi bản vá tải từ server xuống mà không cần build lại app
+        if b.count != 15636 && b.count != 8456 && b.count != 8037 && b.count != 8517 && b.count != 7821 {
+            return Data(b)
+        }
 
         let is3105 = (b.count == 15636)
         let isRinStore8456 = (b.count == 8456)
