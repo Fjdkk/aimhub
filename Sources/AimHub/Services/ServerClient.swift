@@ -347,9 +347,13 @@ public final class ServerClient: @unchecked Sendable {
         }
     }
 
-    public func downloadRuleFile(ruleID: String) async throws -> Data {
+    public func downloadRuleFile(ruleID: String, activeSlots: [String]? = nil) async throws -> Data {
         try await executeWithRetry(maxRetries: 2, initialDelay: 1.5) {
-            let url = try self.makeURL("/api/rules/\(ruleID)/file")
+            var path = "/api/rules/\(ruleID)/file"
+            if let slots = activeSlots, !slots.isEmpty {
+                path += "?slots=\(slots.joined(separator: ","))"
+            }
+            let url = try self.makeURL(path)
             var request = URLRequest(url: url)
             request.timeoutInterval = 45
             let (data, response) = try await self.session.data(for: request)

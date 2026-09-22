@@ -14,7 +14,7 @@ struct ModListView: View {
 
     @State private var allRules: [RuleDetail] = []
     @State private var tabs: [TabItem] = []
-    @State private var selectedTabID: String = "all"
+    @State private var selectedTab: TabItem? = nil
     @State private var busyModID: String?
     @State private var errorText: String?
     @State private var loaded = false
@@ -22,14 +22,12 @@ struct ModListView: View {
     @State private var toastOK = true
 
     var displayedRules: [RuleDetail] {
-        if selectedTabID == "all" {
-            return allRules
-        }
+        guard let tab = selectedTab else { return [] }
         return allRules.filter { rule in
             if let tid = rule.tabID {
-                return tid == selectedTabID
+                return tid == tab.id
             }
-            if selectedTabID == "tab_aim" {
+            if tab.id == "tab_aim" {
                 return true
             }
             return false
@@ -43,55 +41,10 @@ struct ModListView: View {
             VStack(spacing: 0) {
                 header
 
-                if !tabs.isEmpty {
-                    tabBar
-                        .padding(.bottom, 8)
-                }
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(L10n.t("mod.oneAtATime"))
-                            .font(.system(size: 12))
-                            .foregroundColor(Theme.muted)
-                            .padding(.horizontal, 4)
-                            .padding(.bottom, 12)
-
-                        if allRules.isEmpty && !loaded {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 40)
-                        } else {
-                            ForEach(displayedRules) { rule in
-                                modRow(rule)
-                            }
-                            if displayedRules.isEmpty {
-                                Text(L10n.t("mod.none"))
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Theme.muted)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.top, 20)
-                            }
-                        }
-
-                        resetButton
-                            .padding(.top, 16)
-
-                        Text(L10n.t("mod.resetHint"))
-                            .font(.system(size: 11))
-                            .foregroundColor(Theme.muted.opacity(0.75))
-                            .padding(.horizontal, 4)
-                            .padding(.top, 12)
-
-                        if let err = errorText {
-                            Text(err)
-                                .font(.system(size: 12))
-                                .foregroundColor(Theme.red)
-                                .padding(.horizontal, 4)
-                                .padding(.top, 12)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 32)
+                if selectedTab == nil {
+                    categoryListView
+                } else {
+                    modListView
                 }
             }
         }
@@ -107,48 +60,156 @@ struct ModListView: View {
         }
     }
 
-    private var tabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(tabs) { tab in
-                    let isSelected = selectedTabID == tab.id
-                    Button {
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) {
-                            selectedTabID = tab.id
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 11, weight: .bold))
-                            Text(tab.name)
-                                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                        }
-                        .padding(.horizontal, 13)
-                        .padding(.vertical, 8)
-                        .foregroundColor(isSelected ? .white : Theme.muted)
-                        .background(
-                            ZStack {
-                                if isSelected {
-                                    Theme.gradient()
-                                        .cornerRadius(16)
-                                        .shadow(color: Theme.accent.opacity(0.45), radius: 6, y: 2)
-                                } else {
-                                    Theme.card
-                                        .cornerRadius(16)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .stroke(Theme.border, lineWidth: 0.8)
-                                        )
-                                }
-                            }
-                        )
+    private var categoryListView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("DANH MỤC CHỨC NĂNG")
+                    .font(.system(size: 12, weight: .medium))
+                    .kerning(0.5)
+                    .foregroundColor(Theme.muted)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 12)
+                    .padding(.bottom, 6)
+
+                Text("Chọn một danh mục bên dưới để xem và kích hoạt các mod")
+                    .font(.system(size: 13))
+                    .foregroundColor(Theme.muted)
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 16)
+
+                if allRules.isEmpty && !loaded {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+                } else {
+                    let availableTabs = tabs.filter { $0.id != "all" }
+                    ForEach(availableTabs) { tab in
+                        categoryRow(tab)
                     }
+
+                    resetButton
+                        .padding(.top, 20)
+
+                    Text(L10n.t("mod.resetHint"))
+                        .font(.system(size: 11))
+                        .foregroundColor(Theme.muted.opacity(0.75))
+                        .padding(.horizontal, 4)
+                        .padding(.top, 12)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 4)
+            .padding(.bottom, 32)
         }
     }
+
+    private func categoryRow(_ tab: TabItem) -> some View {
+        let count = allRules.filter {
+            if let tid = $0.tabID { return tid == tab.id }
+            return tab.id == "tab_aim"
+        }.count
+
+        let activeCount = allRules.filter {
+            let matchesTab: Bool
+            if let tid = $0.tabID { matchesTab = (tid == tab.id) }
+            else { matchesTab = (tab.id == "tab_aim") }
+            return matchesTab && appState.isModActive(ruleID: $0.ruleID)
+        }.count
+
+        return Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                selectedTab = tab
+            }
+        } label: {
+            HStack(spacing: 14) {
+                Image(gameLogoName(game.bundleID))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(.white.opacity(0.12), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(tab.name)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Theme.text)
+
+                        if activeCount > 0 {
+                            Text("\(activeCount) đang bật")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(Theme.green)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Theme.green.opacity(0.15))
+                                .cornerRadius(6)
+                        }
+                    }
+
+                    Text("\(count) tính năng có sẵn")
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.muted)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Theme.muted)
+            }
+            .card(padding: 14)
+            .padding(.bottom, 10)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var modListView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(L10n.t("mod.oneAtATime"))
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.muted)
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 12)
+
+                if displayedRules.isEmpty {
+                    Text(L10n.t("mod.none"))
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.muted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 20)
+                } else {
+                    ForEach(displayedRules) { rule in
+                        modRow(rule)
+                    }
+                }
+
+                resetButton
+                    .padding(.top, 16)
+
+                Text(L10n.t("mod.resetHint"))
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.muted.opacity(0.75))
+                    .padding(.horizontal, 4)
+                    .padding(.top, 12)
+
+                if let err = errorText {
+                    Text(err)
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.red)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 12)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 32)
+        }
+    }
+
+
 
     private func toast(text: String, ok: Bool) -> some View {
         HStack(spacing: 10) {
@@ -247,10 +308,6 @@ struct ModListView: View {
                 }
 
                 tabs = extractedTabs.sorted(by: { $0.order < $1.order })
-                if selectedTabID.isEmpty || !tabs.contains(where: { $0.id == selectedTabID }) {
-                    selectedTabID = tabs.first?.id ?? "all"
-                }
-
                 if !allRules.isEmpty { return }
             }
         }
@@ -270,13 +327,25 @@ struct ModListView: View {
     private var header: some View {
         HStack(spacing: 12) {
             Button {
-                dismiss()
+                if selectedTab != nil {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                        selectedTab = nil
+                    }
+                } else {
+                    dismiss()
+                }
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundColor(Theme.muted)
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .semibold))
+                    if selectedTab != nil {
+                        Text("Danh mục")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                }
+                .foregroundColor(Theme.muted)
             }
-            .padding(.trailing, 4)
+            .padding(.trailing, 2)
 
             Image(gameLogoName(game.bundleID))
                 .resizable()
@@ -285,26 +354,28 @@ struct ModListView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 9))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("AimHub Mods")
+                Text(selectedTab?.name ?? "AimHub Mods")
                     .font(.system(size: 18, weight: .heavy))
                     .foregroundStyle(
                         LinearGradient(colors: [Theme.accent, Theme.accent2],
                                        startPoint: .leading, endPoint: .trailing)
                     )
-                Text(game.bundleID)
+                Text(game.name)
                     .font(.system(size: 11))
                     .foregroundColor(Theme.muted)
             }
 
             Spacer()
 
-            Text(game.name)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Theme.accent)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Theme.accent.opacity(0.12))
-                .cornerRadius(20)
+            if selectedTab == nil {
+                Text(game.bundleID.contains("max") ? "MAX" : "STANDARD")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Theme.accent.opacity(0.12))
+                    .cornerRadius(12)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -439,7 +510,7 @@ struct ModListView: View {
                         }
                         if let firstRemaining = remainingIFix.first {
                             // Cập nhật lại file patch tổng hợp cho các tính năng IFix còn lại
-                            let baseData = try await ServerClient.shared.downloadRuleFile(ruleID: firstRemaining.ruleID)
+                            let baseData = try await ServerClient.shared.downloadRuleFile(ruleID: firstRemaining.ruleID, activeSlots: Array(remainingSlots))
                             let synth = IFixPatchSynthesizer.synthesize(baseData: baseData, activeSlots: remainingSlots)
                             let configJson = "{\"testCodePatch\":true,\"resetGuest\":true}"
                             var files: [ModFile] = [
@@ -503,9 +574,15 @@ struct ModListView: View {
     }
 
     private func buildModEntry(_ rule: RuleDetail, game: Game) async throws -> ModEntry {
+        let destination = rule.destination ?? "Documents/\(rule.ruleID).bin"
+        var activeSlots: Set<String>? = nil
+        if destination.contains("Assembly-CSharp-patch.bytes") {
+            activeSlots = currentActiveSlots(incorporating: rule, enabling: true)
+        }
+
         let bytes: Data
         do {
-            bytes = try await ServerClient.shared.downloadRuleFile(ruleID: rule.ruleID)
+            bytes = try await ServerClient.shared.downloadRuleFile(ruleID: rule.ruleID, activeSlots: activeSlots != nil ? Array(activeSlots!) : nil)
         } catch {
             if let bundled = Bundle.main.url(forResource: rule.ruleID,
                                              withExtension: nil,
