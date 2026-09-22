@@ -593,7 +593,6 @@ struct ModListView: View {
                 throw error
             }
         }
-        let destination = rule.destination ?? "Documents/\(rule.ruleID).bin"
         var finalBytes = bytes
 
         // Nếu là mod patch IFix -> tổng hợp tất cả các tính năng đang bật vào 1 file patch hoàn chỉnh
