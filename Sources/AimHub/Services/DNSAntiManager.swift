@@ -7,24 +7,21 @@ import UIKit
 public final class DNSAntiManager: ObservableObject {
     public static let shared = DNSAntiManager()
 
+    public let profileID = "62aaee"
+    public let serverURLString = "https://62aaee.dns.nextdns.io"
+
     @Published public var isProtected: Bool = false
     @Published public var isChecking: Bool = false
 
-    private let userDefaultsKey = "aimhub.dnsAnti.enabled"
     private var pollTimer: Timer?
 
     private init() {
-        self.isProtected = UserDefaults.standard.bool(forKey: userDefaultsKey)
-        startPolling()
-    }
-
-    public func toggle() {
-        setProtection(enabled: !isProtected)
+        self.isProtected = UserDefaults.standard.bool(forKey: "aimhub_dns_anti_enabled")
     }
 
     public func setProtection(enabled: Bool) {
         isProtected = enabled
-        UserDefaults.standard.set(enabled, forKey: userDefaultsKey)
+        UserDefaults.standard.set(enabled, forKey: "aimhub_dns_anti_enabled")
 
         Task {
             if enabled {
@@ -36,10 +33,15 @@ public final class DNSAntiManager: ObservableObject {
         }
     }
 
+    public func toggleProtection() {
+        setProtection(enabled: !isProtected)
+    }
+
     public func startPolling() {
         stopPolling()
+        Task { await verifyStatus() }
         pollTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
+            Task { [weak self] in
                 await self?.verifyStatus()
             }
         }
@@ -56,7 +58,7 @@ public final class DNSAntiManager: ObservableObject {
             try await manager.loadFromPreferences()
 
             let dohSettings = NEDNSOverHTTPSSettings(servers: ["45.90.28.0", "45.90.30.0"])
-            dohSettings.serverURL = URL(string: "https://dns.nextdns.io/1a48d7")
+            dohSettings.serverURL = URL(string: serverURLString)
             manager.dnsSettings = dohSettings
             manager.onDemandRules = [NEOnDemandRuleConnect()]
 
@@ -98,9 +100,12 @@ public final class DNSAntiManager: ObservableObject {
             req.timeoutInterval = 3.5
             let (data, resp) = try await URLSession.shared.data(for: req)
             if let httpResp = resp as? HTTPURLResponse, httpResp.statusCode == 200,
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let status = json["status"] as? String, status == "ok" {
-                self.isProtected = true
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let status = json["status"] as? String
+                let profile = json["profile"] as? String
+                if status == "ok" && (profile == nil || profile == profileID) {
+                    self.isProtected = true
+                }
             }
         } catch {
         }
