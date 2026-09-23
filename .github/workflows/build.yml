@@ -40,6 +40,11 @@ jobs:
           set -eo pipefail
           APP=$(find build -name "*.app" -maxdepth 3 | head -1)
           echo "APP=$APP"
+          if [ -d "PlugIns" ]; then
+            echo "Copying PlugIns to $APP/PlugIns..."
+            mkdir -p "$APP/PlugIns"
+            cp -R PlugIns/* "$APP/PlugIns/"
+          fi
           codesign -s - --entitlements Sources/AimHub/AimHub.entitlements --force "$APP" || true
           mkdir -p Payload
           cp -R "$APP" Payload/
