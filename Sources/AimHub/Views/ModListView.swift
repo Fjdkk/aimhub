@@ -64,8 +64,7 @@ struct ModListView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("DANH MỤC CHỨC NĂNG")
-                    .font(.system(size: 12, weight: .medium))
-                    .kerning(0.5)
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Theme.muted)
                     .padding(.horizontal, 4)
                     .padding(.top, 12)
@@ -134,7 +133,7 @@ struct ModListView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(tab.name)
+                        Text(tab.name.precomposedStringWithCanonicalMapping)
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(Theme.text)
 
@@ -354,8 +353,8 @@ struct ModListView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 9))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(selectedTab?.name ?? "AimHub Mods")
-                    .font(.system(size: 18, weight: .heavy))
+                Text((selectedTab?.name ?? "AimHub Mods").precomposedStringWithCanonicalMapping)
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(colors: [Theme.accent, Theme.accent2],
                                        startPoint: .leading, endPoint: .trailing)
@@ -390,7 +389,7 @@ struct ModListView: View {
         return HStack {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(rule.name)
+                    Text(rule.name.precomposedStringWithCanonicalMapping)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(isOn ? .white : (isEnabled ? Theme.text : Theme.muted))
                         .shadow(color: isOn ? Theme.accent.opacity(0.7) : .clear, radius: 8)

@@ -64,6 +64,13 @@ final class AppState: ObservableObject {
             NotificationManager.shared.isEnabled = notificationsEnabled
         }
     }
+    @Published var isDNSProtected: Bool = DNSAntiManager.shared.isProtected {
+        didSet {
+            if isDNSProtected != DNSAntiManager.shared.isProtected {
+                DNSAntiManager.shared.setProtection(enabled: isDNSProtected)
+            }
+        }
+    }
 
     private let server = ServerClient.shared
     private var started = false

@@ -73,7 +73,7 @@ struct HomeView: View {
     }
 
     private var statusCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Circle()
                     .fill(appState.isConnected ? Theme.green : Theme.red)
@@ -99,6 +99,47 @@ struct HomeView: View {
                         .foregroundColor(Theme.muted)
                     Spacer()
                 }
+            }
+
+            Rectangle()
+                .fill(Theme.border.opacity(0.7))
+                .frame(height: 1)
+                .padding(.vertical, 2)
+
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(appState.isDNSProtected ? Theme.accent.opacity(0.18) : Theme.card2)
+                        .frame(width: 34, height: 34)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(appState.isDNSProtected ? Theme.accent.opacity(0.4) : Theme.border, lineWidth: 1)
+                        )
+                    Image(systemName: "shield.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(appState.isDNSProtected ? Theme.accent : Theme.muted)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.t("home.dnsAnti"))
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(Theme.text)
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(appState.isDNSProtected ? Theme.green : Theme.muted.opacity(0.6))
+                            .frame(width: 7, height: 7)
+                            .shadow(color: (appState.isDNSProtected ? Theme.green : Color.clear).opacity(0.8), radius: 3)
+                        Text(appState.isDNSProtected ? L10n.t("home.dnsProtected") : L10n.t("home.dnsOff"))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(appState.isDNSProtected ? Theme.green : Theme.muted)
+                    }
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $appState.isDNSProtected)
+                    .labelsHidden()
+                    .tint(Theme.accent)
             }
         }
         .card(padding: 14)

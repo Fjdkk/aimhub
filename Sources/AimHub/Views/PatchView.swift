@@ -16,8 +16,7 @@ struct PatchView: View {
                 header
 
                 Text(L10n.t("patch.online"))
-                    .font(.system(size: 12, weight: .medium))
-                    .kerning(0.5)
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Theme.muted)
                     .padding(.horizontal, 4)
                     .padding(.top, 18)
@@ -66,7 +65,7 @@ struct PatchView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("PATCH")
-                    .font(.system(size: 24, weight: .heavy))
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(colors: [Theme.accent, Theme.accent2],
                                        startPoint: .leading, endPoint: .trailing)
