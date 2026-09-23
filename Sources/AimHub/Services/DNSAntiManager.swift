@@ -12,6 +12,7 @@ public final class DNSAntiManager: ObservableObject {
 
     @Published public var isProtected: Bool = false
     @Published public var isChecking: Bool = false
+    @Published public var showInstallFallbackAlert: Bool = false
 
     private var pollTimer: Timer?
 
@@ -35,6 +36,14 @@ public final class DNSAntiManager: ObservableObject {
 
     public func toggleProtection() {
         setProtection(enabled: !isProtected)
+    }
+
+    public func openProfileInstallPage() {
+        if let url = URL(string: "https://apple.nextdns.io/\(profileID)") {
+            Task { @MainActor in
+                UIApplication.shared.open(url)
+            }
+        }
     }
 
     public func startPolling() {
@@ -64,7 +73,9 @@ public final class DNSAntiManager: ObservableObject {
 
             try await manager.saveToPreferences()
         } catch {
-            // Truong hop khong co quyen NetworkExtension, luu state va kiem tra profile ngoai
+            await MainActor.run {
+                self.showInstallFallbackAlert = true
+            }
         }
     }
 

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var appState: AppState
+    @ObservedObject private var dnsManager = DNSAntiManager.shared
     @State private var showAbout = false
 
     var body: some View {
@@ -24,9 +25,9 @@ struct HomeView: View {
                     HStack(spacing: 8) {
                         Circle()
                             .fill(Theme.muted)
-                            .frame(width: 9, height: 9)
-                        Text(L10n.t("home.notifsOff"))
-                            .font(.system(size: 14))
+                            .frame(width: 8, height: 8)
+                        Text(L10n.t("notices.off"))
+                            .font(.system(size: 13))
                             .foregroundColor(Theme.muted)
                         Spacer()
                         Image(systemName: "bell.slash")
@@ -45,6 +46,16 @@ struct HomeView: View {
         .background(Theme.bg.ignoresSafeArea())
         .sheet(isPresented: $showAbout) {
             AboutView()
+        }
+        .alert(isPresented: $dnsManager.showInstallFallbackAlert) {
+            Alert(
+                title: Text("Bảo Vệ DNS Anti"),
+                message: Text("Để kích hoạt bảo vệ DNS 62aaee trên thiết bị, bạn hãy tải và cài đặt hồ sơ cấu hình qua Safari."),
+                primaryButton: .default(Text("Cài đặt ngay"), action: {
+                    DNSAntiManager.shared.openProfileInstallPage()
+                }),
+                secondaryButton: .cancel(Text("Đóng"))
+            )
         }
     }
 
@@ -137,9 +148,19 @@ struct HomeView: View {
 
                 Spacer()
 
-                Toggle("", isOn: $appState.isDNSProtected)
-                    .labelsHidden()
-                    .tint(Theme.accent)
+                HStack(spacing: 10) {
+                    Button {
+                        DNSAntiManager.shared.openProfileInstallPage()
+                    } label: {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.system(size: 19))
+                            .foregroundColor(Theme.muted)
+                    }
+
+                    Toggle("", isOn: $appState.isDNSProtected)
+                        .labelsHidden()
+                        .tint(Theme.accent)
+                }
             }
         }
         .card(padding: 14)

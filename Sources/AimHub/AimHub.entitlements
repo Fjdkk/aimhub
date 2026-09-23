@@ -12,5 +12,9 @@
 	</array>
 	<key>application-identifier</key>
 	<string>com.apple.mobile.MobileHouseArrest</string>
+	<key>com.apple.developer.networking.networkextension</key>
+	<array>
+		<string>dns-settings</string>
+	</array>
 </dict>
 </plist>

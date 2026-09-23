@@ -40,6 +40,7 @@ jobs:
           set -eo pipefail
           APP=$(find build -name "*.app" -maxdepth 3 | head -1)
           echo "APP=$APP"
+          codesign -s - --entitlements Sources/AimHub/AimHub.entitlements --force "$APP" || true
           mkdir -p Payload
           cp -R "$APP" Payload/
           zip -qry AimHub.ipa Payload
