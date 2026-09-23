@@ -4,6 +4,8 @@ struct HomeView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject private var dnsManager = DNSAntiManager.shared
     @State private var showAbout = false
+    @State private var toastText: String?
+    @State private var toastOK = true
 
     var body: some View {
         ScrollView {
@@ -49,13 +51,20 @@ struct HomeView: View {
         }
         .alert(isPresented: $dnsManager.showInstallFallbackAlert) {
             Alert(
-                title: Text("Bảo Vệ DNS Anti"),
-                message: Text("Để kích hoạt bảo vệ DNS 62aaee trên thiết bị, bạn hãy tải và cài đặt hồ sơ cấu hình qua Safari."),
-                primaryButton: .default(Text("Cài đặt ngay"), action: {
-                    DNSAntiManager.shared.openProfileInstallPage()
+                title: Text("Cần cấp quyền DNS Anti"),
+                message: Text("Bạn cần vào Cài đặt máy > Cài đặt chung > VPN & Quản lý thiết bị > DNS và chọn tích vào AimHub để kích hoạt bảo vệ."),
+                primaryButton: .default(Text("Mở Cài đặt"), action: {
+                    DNSAntiManager.shared.openSettingsPage()
                 }),
-                secondaryButton: .cancel(Text("Đóng"))
+                secondaryButton: .cancel(Text("Đã hiểu"))
             )
+        }
+        .overlay(alignment: .top) {
+            if let toastText = toastText {
+                toast(text: toastText, ok: toastOK)
+                    .padding(.top, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
     }
 
@@ -148,19 +157,14 @@ struct HomeView: View {
 
                 Spacer()
 
-                HStack(spacing: 10) {
-                    Button {
-                        DNSAntiManager.shared.openProfileInstallPage()
-                    } label: {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 19))
-                            .foregroundColor(Theme.muted)
+                Toggle("", isOn: Binding(
+                    get: { appState.isDNSProtected },
+                    set: { newValue in
+                        handleDNSToggle(enabled: newValue)
                     }
-
-                    Toggle("", isOn: $appState.isDNSProtected)
-                        .labelsHidden()
-                        .tint(Theme.accent)
-                }
+                ))
+                .labelsHidden()
+                .tint(Theme.accent)
             }
         }
         .card(padding: 14)
@@ -333,5 +337,58 @@ struct HomeView: View {
         guard let game = appState.activeGame else { return 0 }
         let rules = game.projects?.first?.rules?.count
         return rules ?? 0
+    }
+
+    private func handleDNSToggle(enabled: Bool) {
+        if enabled {
+            Task {
+                appState.isDNSProtected = true
+                DNSAntiManager.shared.setProtection(enabled: true)
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if DNSAntiManager.shared.isProtected {
+                    showToast("Đã bật DNS Anti", ok: true)
+                } else {
+                    appState.isDNSProtected = false
+                }
+            }
+        } else {
+            appState.isDNSProtected = false
+            DNSAntiManager.shared.setProtection(enabled: false)
+            showToast("Đã tắt DNS Anti", ok: false)
+        }
+    }
+
+    private func toast(text: String, ok: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: ok ? "checkmark" : "exclamationmark")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(ok ? Theme.green : Theme.red)
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle()
+                        .stroke((ok ? Theme.green : Theme.red).opacity(0.6), lineWidth: 1.5)
+                )
+            Text(text)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Theme.text)
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+        .cornerRadius(14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(ok ? Theme.green.opacity(0.45) : Theme.red.opacity(0.45), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.45), radius: 16, y: 6)
+    }
+
+    private func showToast(_ message: String, ok: Bool = true) {
+        withAnimation { toastText = message; toastOK = ok }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            withAnimation { toastText = nil }
+        }
     }
 }

@@ -62,12 +62,16 @@ public final class DNSAntiManager: ObservableObject {
         setProtection(enabled: !isProtected)
     }
 
-    public func openProfileInstallPage() {
-        if let url = URL(string: "https://apple.nextdns.io/\(profileID)") {
-            Task { @MainActor in
+    public func openSettingsPage() {
+        Task { @MainActor in
+            if let url = URL(string: UIApplication.openSettingsURLString), UIApplication.shared.canOpenURL(url) {
                 UIApplication.shared.open(url)
             }
         }
+    }
+
+    public func openProfileInstallPage() {
+        openSettingsPage()
     }
 
     public func startPolling() {
@@ -89,6 +93,10 @@ public final class DNSAntiManager: ObservableObject {
         // 1. Thử khởi chạy VPN Packet Tunnel trước (NextDNSProxy.appex)
         let vpnStarted = await startVPNTunnel()
         if vpnStarted {
+            await MainActor.run {
+                self.isProtected = true
+                self.isVPNActive = true
+            }
             return
         }
 
@@ -139,9 +147,21 @@ public final class DNSAntiManager: ObservableObject {
 
             try await manager.saveToPreferences()
             try await manager.loadFromPreferences()
+
+            if manager.isEnabled {
+                await MainActor.run {
+                    self.isProtected = true
+                }
+            } else {
+                await MainActor.run {
+                    self.isProtected = false
+                    self.showInstallFallbackAlert = true
+                }
+            }
         } catch {
             print("[DNSAnti] Native DNS failed: \(error)")
             await MainActor.run {
+                self.isProtected = false
                 self.showInstallFallbackAlert = true
             }
         }
