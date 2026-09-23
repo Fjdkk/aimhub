@@ -13,7 +13,6 @@ public final class DNSAntiManager: ObservableObject {
     @Published public var isProtected: Bool = false
     @Published public var isChecking: Bool = false
     @Published public var showInstallFallbackAlert: Bool = false
-    @Published public var isVPNActive: Bool = false
 
     private var pollTimer: Timer?
 
@@ -23,16 +22,6 @@ public final class DNSAntiManager: ObservableObject {
     }
 
     private func setupNotificationObservers() {
-        NotificationCenter.default.addObserver(
-            forName: .NEVPNStatusDidChange,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.verifyStatus()
-            }
-        }
-
         NotificationCenter.default.addObserver(
             forName: .NEDNSSettingsConfigurationDidChange,
             object: nil,
@@ -62,18 +51,6 @@ public final class DNSAntiManager: ObservableObject {
         setProtection(enabled: !isProtected)
     }
 
-    public func openSettingsPage() {
-        Task { @MainActor in
-            if let url = URL(string: UIApplication.openSettingsURLString), UIApplication.shared.canOpenURL(url) {
-                UIApplication.shared.open(url)
-            }
-        }
-    }
-
-    public func openProfileInstallPage() {
-        openSettingsPage()
-    }
-
     public func startPolling() {
         stopPolling()
         Task { await verifyStatus() }
@@ -89,52 +66,9 @@ public final class DNSAntiManager: ObservableObject {
         pollTimer = nil
     }
 
+    // MARK: - Bật DNS Anti (chuẩn NextDNS: NEDNSSettingsManager + NEOnDemandRuleConnect)
+
     private func startProtection() async {
-        // 1. Thử khởi chạy VPN Packet Tunnel trước (NextDNSProxy.appex)
-        let vpnStarted = await startVPNTunnel()
-        if vpnStarted {
-            await MainActor.run {
-                self.isProtected = true
-                self.isVPNActive = true
-            }
-            return
-        }
-
-        // 2. Nếu VPN Tunnel không khả dụng, nạp Native DoH
-        await applyNativeDNS()
-    }
-
-    private func startVPNTunnel() async -> Bool {
-        do {
-            let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-            let manager = managers.first ?? NETunnelProviderManager()
-
-            let proto = NETunnelProviderProtocol()
-            let hostBundleID = Bundle.main.bundleIdentifier ?? "com.apple.mobile.MobileHouseArrest"
-            proto.providerBundleIdentifier = "\(hostBundleID).NextDNSProxy"
-            proto.serverAddress = "NextDNS"
-            proto.providerConfiguration = [
-                "configurationId": profileID
-            ]
-
-            manager.protocolConfiguration = proto
-            manager.localizedDescription = "AimHub Anti-Cheat (NextDNS)"
-            manager.isEnabled = true
-
-            try await manager.saveToPreferences()
-            try await manager.loadFromPreferences()
-
-            if let session = manager.connection as? NETunnelProviderSession {
-                try session.startVPNTunnel(options: nil)
-                return true
-            }
-        } catch {
-            print("[DNSAnti] VPN tunnel failed, falling back to Native DNS: \(error)")
-        }
-        return false
-    }
-
-    private func applyNativeDNS() async {
         do {
             let manager = NEDNSSettingsManager.shared()
             try await manager.loadFromPreferences()
@@ -149,64 +83,39 @@ public final class DNSAntiManager: ObservableObject {
             try await manager.loadFromPreferences()
 
             if manager.isEnabled {
-                await MainActor.run {
-                    self.isProtected = true
-                }
+                self.isProtected = true
             } else {
-                await MainActor.run {
-                    self.isProtected = false
-                    self.showInstallFallbackAlert = true
-                }
-            }
-        } catch {
-            print("[DNSAnti] Native DNS failed: \(error)")
-            await MainActor.run {
                 self.isProtected = false
                 self.showInstallFallbackAlert = true
             }
+        } catch {
+            print("[DNSAnti] DNS settings failed: \(error)")
+            self.isProtected = false
+            self.showInstallFallbackAlert = true
         }
     }
 
-    private func stopProtection() async {
-        // Tắt VPN Tunnel
-        do {
-            let managers = try await NETunnelProviderManager.loadAllFromPreferences()
-            for m in managers {
-                m.isEnabled = false
-                try? await m.saveToPreferences()
-                if let session = m.connection as? NETunnelProviderSession {
-                    session.stopVPNTunnel()
-                }
-            }
-        } catch {}
+    // MARK: - Tắt DNS Anti (chuẩn NextDNS: NEOnDemandRuleDisconnect)
 
-        // Tắt Native DNS
+    private func stopProtection() async {
         do {
             let manager = NEDNSSettingsManager.shared()
             try await manager.loadFromPreferences()
-            try await manager.removeFromPreferences()
-        } catch {}
+
+            manager.onDemandRules = [NEOnDemandRuleDisconnect()]
+            try await manager.saveToPreferences()
+        } catch {
+            print("[DNSAnti] Failed to disconnect DNS: \(error)")
+        }
     }
 
+    // MARK: - Kiểm tra trạng thái
+
     public func verifyStatus() async {
-        guard isProtected else {
-            self.isVPNActive = false
-            return
-        }
+        guard isProtected else { return }
         isChecking = true
         defer { isChecking = false }
 
-        // 1. Kiểm tra trạng thái VPN Tunnel
-        if let managers = try? await NETunnelProviderManager.loadAllFromPreferences(),
-           let manager = managers.first {
-            if manager.connection.status == .connected || manager.connection.status == .connecting {
-                self.isVPNActive = true
-                self.isProtected = true
-                return
-            }
-        }
-
-        // 2. Kiểm tra trạng thái NEDNSSettingsManager
         do {
             let manager = NEDNSSettingsManager.shared()
             try await manager.loadFromPreferences()
@@ -216,7 +125,7 @@ public final class DNSAntiManager: ObservableObject {
             }
         } catch {}
 
-        // 3. Fallback kiểm tra NextDNS info API
+        // Fallback kiểm tra NextDNS info API
         guard let url = URL(string: "https://dns.nextdns.io/info") else { return }
         do {
             var req = URLRequest(url: url)

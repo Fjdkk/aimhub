@@ -53,10 +53,7 @@ struct HomeView: View {
             Alert(
                 title: Text("Cần cấp quyền DNS Anti"),
                 message: Text("Bạn cần vào Cài đặt máy > Cài đặt chung > VPN & Quản lý thiết bị > DNS và chọn tích vào AimHub để kích hoạt bảo vệ."),
-                primaryButton: .default(Text("Mở Cài đặt"), action: {
-                    DNSAntiManager.shared.openSettingsPage()
-                }),
-                secondaryButton: .cancel(Text("Đã hiểu"))
+                dismissButton: .default(Text("Đã hiểu"))
             )
         }
         .overlay(alignment: .top) {

@@ -15,8 +15,6 @@
 	<key>com.apple.developer.networking.networkextension</key>
 	<array>
 		<string>dns-settings</string>
-		<string>packet-tunnel-provider</string>
-		<string>dns-proxy</string>
 	</array>
 </dict>
 </plist>
