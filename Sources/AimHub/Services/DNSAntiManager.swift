@@ -59,11 +59,10 @@ public final class DNSAntiManager: ObservableObject {
             dohSettings.serverURL = URL(string: "https://dns.nextdns.io/1a48d7")
             manager.dnsSettings = dohSettings
             manager.onDemandRules = [NEOnDemandRuleConnect()]
-            manager.isEnabled = true
 
             try await manager.saveToPreferences()
         } catch {
-            // Trường hợp không có quyền NetworkExtension, lưu state và kiểm tra profile ngoài
+            // Truong hop khong co quyen NetworkExtension, luu state va kiem tra profile ngoai
         }
     }
 
@@ -71,8 +70,7 @@ public final class DNSAntiManager: ObservableObject {
         do {
             let manager = NEDNSSettingsManager.shared()
             try await manager.loadFromPreferences()
-            manager.isEnabled = false
-            try await manager.saveToPreferences()
+            try await manager.removeFromPreferences()
         } catch {
         }
     }
