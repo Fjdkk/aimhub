@@ -23,6 +23,9 @@ public final class DNSAntiManager: ObservableObject {
         setupNotificationObservers()
         Task {
             await verifyStatus()
+            if !self.isProtected {
+                self.requestPermission()
+            }
         }
     }
 
