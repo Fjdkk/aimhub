@@ -51,7 +51,7 @@ struct HomeView: View {
         }
         .alert(isPresented: $dnsManager.showInstallFallbackAlert) {
             Alert(
-                title: Text("Cần cấp quyền DNS Anti"),
+                title: Text("Cần cấp quyền AimHub"),
                 message: Text("Bạn cần vào Cài đặt máy > Cài đặt chung > VPN & Quản lý thiết bị > DNS và chọn tích vào AimHub để kích hoạt bảo vệ."),
                 dismissButton: .default(Text("Đã hiểu"))
             )
@@ -340,9 +340,9 @@ struct HomeView: View {
     private func handleDNSTap() {
         if !dnsManager.isProtected {
             dnsManager.requestPermission()
-            showToast("Đang kích hoạt DNS AimHub...", ok: true)
+            showToast("Đang kích hoạt AimHub...", ok: true)
         } else {
-            showToast("AimHub DNS đang bảo vệ an toàn ✓", ok: true)
+            showToast("AimHub đang bảo vệ an toàn ✓", ok: true)
         }
     }
 

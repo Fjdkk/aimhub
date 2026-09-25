@@ -150,38 +150,61 @@ public final class DNSAntiManager: ObservableObject {
         isChecking = true
         defer { isChecking = false }
 
+        // 1. Đồng bộ cấu hình trong hệ thống nếu chưa đổi tên sang "AimHub"
         do {
             let manager = NEDNSSettingsManager.shared()
             try await manager.loadFromPreferences()
-            if manager.isEnabled {
-                self.isProtected = true
-                UserDefaults.standard.set(true, forKey: "aimhub_dns_anti_enabled")
+            if manager.localizedDescription != profileDisplayName {
+                manager.localizedDescription = profileDisplayName
+                try? await manager.saveToPreferences()
+            }
+            if !manager.isEnabled {
+                self.isProtected = false
+                UserDefaults.standard.set(false, forKey: "aimhub_dns_anti_enabled")
                 return
             }
-        } catch {}
+        } catch {
+            self.isProtected = false
+            UserDefaults.standard.set(false, forKey: "aimhub_dns_anti_enabled")
+            return
+        }
 
-        // Fallback kiểm tra NextDNS info API
-        guard let url = URL(string: "https://dns.nextdns.io/info") else { return }
+        // 2. Kiểm tra trực tiếp xem lưu lượng DNS có đang chạy qua đúng profile AimHub (62aaee) không
+        // Nếu user chuyển sang DNS khác trong Cài đặt máy -> test.nextdns.io trả về status: "unconfigured" -> lập tức gán false (hiện đỏ)
+        let isActive = await checkLiveNextDNSProfile()
+        self.isProtected = isActive
+        UserDefaults.standard.set(isActive, forKey: "aimhub_dns_anti_enabled")
+    }
+
+    private func checkLiveNextDNSProfile() async -> Bool {
+        guard let url = URL(string: "https://test.nextdns.io") else { return false }
         do {
             var req = URLRequest(url: url)
-            req.timeoutInterval = 2.5
-            let (_, resp) = try await URLSession.shared.data(for: req)
-            if let httpResp = resp as? HTTPURLResponse, httpResp.statusCode == 200 {
-                self.isProtected = true
-                UserDefaults.standard.set(true, forKey: "aimhub_dns_anti_enabled")
-                return
+            req.timeoutInterval = 3.0
+            req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let httpResp = resp as? HTTPURLResponse, httpResp.statusCode == 200 else {
+                return false
             }
-        } catch {}
-
-        // Nếu cả 2 đều không bật
-        self.isProtected = false
-        UserDefaults.standard.set(false, forKey: "aimhub_dns_anti_enabled")
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let status = json["status"] as? String {
+                if status == "ok" {
+                    if let prof = json["profile"] as? String {
+                        return prof == profileID
+                    }
+                    return true
+                }
+            }
+            return false
+        } catch {
+            return false
+        }
     }
 
     public func startPolling() {
         stopPolling()
         Task { await verifyStatus() }
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 6.0, repeats: true) { [weak self] _ in
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.verifyStatus()
             }
