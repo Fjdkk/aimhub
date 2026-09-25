@@ -123,46 +123,47 @@ struct HomeView: View {
                 .frame(height: 1)
                 .padding(.vertical, 2)
 
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(appState.isDNSProtected ? Theme.accent.opacity(0.18) : Theme.card2)
-                        .frame(width: 34, height: 34)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(appState.isDNSProtected ? Theme.accent.opacity(0.4) : Theme.border, lineWidth: 1)
-                        )
-                    Image(systemName: "shield.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(appState.isDNSProtected ? Theme.accent : Theme.muted)
-                }
+            Button {
+                handleDNSTap()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(dnsManager.isProtected ? Theme.green.opacity(0.15) : Theme.red.opacity(0.15))
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(dnsManager.isProtected ? Theme.green.opacity(0.5) : Theme.red.opacity(0.5), lineWidth: 1)
+                            )
+                        Image(systemName: "shield.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(dnsManager.isProtected ? Theme.green : Theme.red)
+                    }
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(L10n.t("home.dnsAnti"))
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(Theme.text)
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(appState.isDNSProtected ? Theme.green : Theme.muted.opacity(0.6))
-                            .frame(width: 7, height: 7)
-                            .shadow(color: (appState.isDNSProtected ? Theme.green : Color.clear).opacity(0.8), radius: 3)
-                        Text(appState.isDNSProtected ? L10n.t("home.dnsProtected") : L10n.t("home.dnsOff"))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(appState.isDNSProtected ? Theme.green : Theme.muted)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("home.dnsAnti"))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Theme.text)
+                        HStack(spacing: 6) {
+                            Text(dnsManager.isProtected ? L10n.t("home.dnsProtected") : L10n.t("home.dnsOff"))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(dnsManager.isProtected ? Theme.green : Theme.red)
+                        }
+                    }
+
+                    Spacer()
+
+                    if dnsManager.isChecking {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: dnsManager.isProtected ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(dnsManager.isProtected ? Theme.green : Theme.red)
                     }
                 }
-
-                Spacer()
-
-                Toggle("", isOn: Binding(
-                    get: { appState.isDNSProtected },
-                    set: { newValue in
-                        handleDNSToggle(enabled: newValue)
-                    }
-                ))
-                .labelsHidden()
-                .tint(Theme.accent)
             }
+            .buttonStyle(.plain)
         }
         .card(padding: 14)
     }
@@ -336,22 +337,12 @@ struct HomeView: View {
         return rules ?? 0
     }
 
-    private func handleDNSToggle(enabled: Bool) {
-        if enabled {
-            Task {
-                appState.isDNSProtected = true
-                DNSAntiManager.shared.setProtection(enabled: true)
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                if DNSAntiManager.shared.isProtected {
-                    showToast("Đã bật DNS Anti", ok: true)
-                } else {
-                    appState.isDNSProtected = false
-                }
-            }
+    private func handleDNSTap() {
+        if !dnsManager.isProtected {
+            dnsManager.requestPermission()
+            showToast("Đang kích hoạt DNS AimHub...", ok: true)
         } else {
-            appState.isDNSProtected = false
-            DNSAntiManager.shared.setProtection(enabled: false)
-            showToast("Đã tắt DNS Anti", ok: false)
+            showToast("AimHub DNS đang bảo vệ an toàn ✓", ok: true)
         }
     }
 

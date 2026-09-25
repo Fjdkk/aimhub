@@ -54,9 +54,9 @@ public enum L10n {
         "home.fps": [.vietnamese: "FPS", .english: "FPS"],
         "home.connectedSince": [.vietnamese: "Kết nối lúc", .english: "Connected at"],
         "home.latency": [.vietnamese: "Độ trễ", .english: "Latency"],
-        "home.dnsAnti": [.vietnamese: "DNS Anti", .english: "DNS Anti"],
-        "home.dnsProtected": [.vietnamese: "Đang được bảo vệ", .english: "Protected"],
-        "home.dnsOff": [.vietnamese: "Đã tắt", .english: "Off"],
+        "home.dnsAnti": [.vietnamese: "AimHub DNS", .english: "AimHub DNS"],
+        "home.dnsProtected": [.vietnamese: "Đã cấp quyền (Đang bảo vệ)", .english: "Protected"],
+        "home.dnsOff": [.vietnamese: "Chưa cấp quyền (Chạm để cấp)", .english: "Not granted (Tap to grant)"],
 
         // ===== Patch =====
         "patch.online": [.vietnamese: "THƯ VIỆN ONLINE", .english: "ONLINE LIBRARY"],
