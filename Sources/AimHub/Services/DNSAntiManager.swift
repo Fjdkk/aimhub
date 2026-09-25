@@ -15,7 +15,6 @@ public final class DNSAntiManager: ObservableObject {
     @Published public var isChecking: Bool = false
     @Published public var showInstallFallbackAlert: Bool = false
 
-    private var pollTimer: Timer?
     private var permissionPollTask: Task<Void, Never>?
 
     private init() {
@@ -23,6 +22,7 @@ public final class DNSAntiManager: ObservableObject {
         setupNotificationObservers()
         Task {
             await verifyStatus()
+            // Nếu chưa được bật thì tự động xin cấp quyền 1 lần duy nhất lúc mở app
             if !self.isProtected {
                 self.requestPermission()
             }
@@ -30,7 +30,7 @@ public final class DNSAntiManager: ObservableObject {
     }
 
     private func setupNotificationObservers() {
-        // Lắng nghe khi cấu hình DNS trong iOS thay đổi
+        // Chỉ kiểm tra khi cấu hình DNS trong iOS thực sự thay đổi
         NotificationCenter.default.addObserver(
             forName: .NEDNSSettingsConfigurationDidChange,
             object: nil,
@@ -41,7 +41,7 @@ public final class DNSAntiManager: ObservableObject {
             }
         }
 
-        // Lắng nghe khi người dùng quay lại app (sau khi bấm Cho phép popup iOS)
+        // Kiểm tra lại khi người dùng quay lại app (từ màn hình Cài đặt hoặc đa nhiệm)
         NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification,
             object: nil,
@@ -61,7 +61,6 @@ public final class DNSAntiManager: ObservableObject {
 
         Task {
             await startProtection()
-            // Bắt đầu quét nhanh trong 8 giây để nhận diện ngay khi user bấm "Cho phép" trên popup iOS
             startPermissionCheckPolling()
         }
     }
@@ -69,7 +68,7 @@ public final class DNSAntiManager: ObservableObject {
     private func startPermissionCheckPolling() {
         permissionPollTask?.cancel()
         permissionPollTask = Task {
-            for _ in 0..<16 { // 16 lần x 0.5s = 8 giây
+            for _ in 0..<10 { // Thử tối đa 10 lần (5 giây) để bắt popup Cho phép
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 if Task.isCancelled { break }
                 let active = await checkManagerIsEnabled()
@@ -94,7 +93,7 @@ public final class DNSAntiManager: ObservableObject {
         }
     }
 
-    // MARK: - Bật DNS Anti (chuẩn NextDNS: NEDNSSettingsManager + NEOnDemandRuleConnect)
+    // MARK: - Bật DNS Anti (Lưu cấu hình chuẩn AimHub)
 
     public func startProtection() async {
         do {
@@ -105,7 +104,7 @@ public final class DNSAntiManager: ObservableObject {
             dohSettings.serverURL = URL(string: serverURLString)
             manager.dnsSettings = dohSettings
             manager.onDemandRules = [NEOnDemandRuleConnect()]
-            manager.localizedDescription = profileDisplayName // Chỉ ghi đúng chữ "AimHub"
+            manager.localizedDescription = profileDisplayName // Hiển thị đúng chữ "AimHub"
 
             try await manager.saveToPreferences()
             try await manager.loadFromPreferences()
@@ -147,21 +146,17 @@ public final class DNSAntiManager: ObservableObject {
         setProtection(enabled: !isProtected)
     }
 
-    // MARK: - Kiểm tra trạng thái tự động
+    // MARK: - Kiểm tra trạng thái ổn định (KHÔNG lưu đè để tránh ngắt DNS)
 
     public func verifyStatus() async {
         isChecking = true
         defer { isChecking = false }
 
-        // 1. Đồng bộ cấu hình trong hệ thống nếu chưa đổi tên sang "AimHub"
+        // 1. Kiểm tra trạng thái manager trong iOS
         do {
             let manager = NEDNSSettingsManager.shared()
             try await manager.loadFromPreferences()
-            if manager.localizedDescription != profileDisplayName {
-                manager.localizedDescription = profileDisplayName
-                try? await manager.saveToPreferences()
-            }
-            if !manager.isEnabled {
+            guard manager.isEnabled else {
                 self.isProtected = false
                 UserDefaults.standard.set(false, forKey: "aimhub_dns_anti_enabled")
                 return
@@ -172,22 +167,21 @@ public final class DNSAntiManager: ObservableObject {
             return
         }
 
-        // 2. Kiểm tra trực tiếp xem lưu lượng DNS có đang chạy qua đúng profile AimHub (62aaee) không
-        // Nếu user chuyển sang DNS khác trong Cài đặt máy -> test.nextdns.io trả về status: "unconfigured" -> lập tức gán false (hiện đỏ)
-        let isActive = await checkLiveNextDNSProfile()
-        self.isProtected = isActive
-        UserDefaults.standard.set(isActive, forKey: "aimhub_dns_anti_enabled")
+        // 2. Kiểm tra trực tiếp gói tin từ NextDNS
+        let active = await checkLiveNextDNSProfile()
+        self.isProtected = active
+        UserDefaults.standard.set(active, forKey: "aimhub_dns_anti_enabled")
     }
 
     private func checkLiveNextDNSProfile() async -> Bool {
-        guard let url = URL(string: "https://test.nextdns.io") else { return false }
+        guard let url = URL(string: "https://test.nextdns.io") else { return true }
         do {
             var req = URLRequest(url: url)
-            req.timeoutInterval = 3.0
+            req.timeoutInterval = 2.0
             req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard let httpResp = resp as? HTTPURLResponse, httpResp.statusCode == 200 else {
-                return false
+                return self.isProtected // Nếu server test bận, giữ nguyên trạng thái cũ
             }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let status = json["status"] as? String {
@@ -196,27 +190,23 @@ public final class DNSAntiManager: ObservableObject {
                         return prof == profileID
                     }
                     return true
+                } else if status == "unconfigured" {
+                    // Người dùng đã chuyển sang DNS khác hoặc Tự động
+                    return false
                 }
             }
-            return false
+            return self.isProtected
         } catch {
-            return false
+            // Mạng yếu hoặc rớt gói tin -> không tự ngắt trạng thái bảo vệ
+            return self.isProtected
         }
     }
 
     public func startPolling() {
-        stopPolling()
-        Task { await verifyStatus() }
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                await self?.verifyStatus()
-            }
-        }
+        // Không dùng polling timer dày đặc để tránh làm lag và ngắt kết nối DNS của iOS
     }
 
     public func stopPolling() {
-        pollTimer?.invalidate()
-        pollTimer = nil
         permissionPollTask?.cancel()
         permissionPollTask = nil
     }

@@ -339,7 +339,7 @@ final class AppState: ObservableObject {
     // MARK: - Session (auto logout khi rời app quá lâu)
 
     private func sessionDurationMinutes() -> Int {
-        versionInfo?.sessionDuration ?? 60
+        11
     }
 
     /// Gọi khi app vào lại foreground / khởi động. Đếm thời gian rời app,
@@ -391,7 +391,10 @@ final class AppState: ObservableObject {
     }
 
     private func expireSession() {
-        log("Phiên hoạt động đã hết hạn")
+        log("Phiên hoạt động đã hết hạn (quá 11 phút)")
+        Task {
+            await DNSAntiManager.shared.stopProtection()
+        }
         let bundleID = activeGame?.bundleID
             ?? UserDefaults.standard.string(forKey: "activeBundleID")
         if let bundleID = bundleID, !activeMods.isEmpty {
