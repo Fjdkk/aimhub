@@ -132,12 +132,16 @@ public final class DNSAntiManager: ObservableObject {
         }
     }
 
-    public func toggleProtection() {
-        if isProtected {
-            Task { await stopProtection() }
-        } else {
+    public func setProtection(enabled: Bool) {
+        if enabled {
             requestPermission()
+        } else {
+            Task { await stopProtection() }
         }
+    }
+
+    public func toggleProtection() {
+        setProtection(enabled: !isProtected)
     }
 
     // MARK: - Kiểm tra trạng thái tự động
