@@ -33,16 +33,53 @@ public final class ContainerAccess {
         let hostID = Bundle.main.bundleIdentifier ?? "nil"
         Self.diag("Host bundleID = \(hostID)")
 
-        guard let mcm = mcm else {
-            Self.diag("MCM chưa nạp (dlopen thất bại)")
-            throw ModManagerError.containerUnavailable
+        // Tier 1: MCM Basic
+        if let mcm = mcm {
+            do {
+                let path = try mcm.containerPathBasic(forBundleID: bundleID)
+                Self.diag("MCM basic OK: \(path)")
+                return path
+            } catch {
+                Self.diag("MCM basic FAIL: \(error.localizedDescription)")
+            }
+
+            // Tier 2: MCM Advanced / Iterate
+            do {
+                let path = try mcm.containerPath(forBundleID: bundleID)
+                Self.diag("MCM advanced OK: \(path)")
+                return path
+            } catch {
+                Self.diag("MCM advanced FAIL: \(error.localizedDescription)")
+            }
+
+            do {
+                if let path = try mcm.containerPathByIterating(forBundleID: bundleID) {
+                    Self.diag("MCM by iterating OK: \(path)")
+                    return path
+                }
+            } catch {
+                Self.diag("MCM iterate FAIL: \(error.localizedDescription)")
+            }
         }
-        do {
-            let path = try mcm.containerPathBasic(forBundleID: bundleID)
-            Self.diag("MCM OK: \(path)")
-            return path
-        } catch {
-            Self.diag("MCM FAIL: \(error.localizedDescription)")
+
+        // Tier 3: Direct Containers Filesystem Scan (TrollStore / Jailed FS / iOS 16)
+        let appsRoot = "/var/mobile/Containers/Data/Application"
+        let fm = FileManager.default
+        if let contents = try? fm.contentsOfDirectory(atPath: appsRoot) {
+            Self.diag("Scanning \(contents.count) app containers in \(appsRoot)...")
+            for sub in contents {
+                let candidatePath = "\(appsRoot)/\(sub)"
+                let metaPath = "\(candidatePath)/.com.apple.mobile_container_manager.metadata.plist"
+                if fm.fileExists(atPath: metaPath) {
+                    if let data = try? Data(contentsOf: URL(fileURLWithPath: metaPath)),
+                       let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+                       let ident = plist["MCMMetadataIdentifier"] as? String,
+                       ident == bundleID {
+                        Self.diag("Found container by metadata: \(candidatePath)")
+                        return candidatePath
+                    }
+                }
+            }
         }
 
         Self.diag(">>> Tất cả phương pháp thất bại cho \(bundleID)")

@@ -21,6 +21,26 @@ struct ModListView: View {
     @State private var toastText: String?
     @State private var toastOK = true
 
+    // Menu AimHub State (Persisted via AppStorage)
+    @AppStorage("aimhub.menu.esp_box") private var menuEspBox: Bool = true
+    @AppStorage("aimhub.menu.esp_line") private var menuEspLine: Bool = true
+    @AppStorage("aimhub.menu.esp_name") private var menuEspName: Bool = true
+    @AppStorage("aimhub.menu.esp_distance") private var menuEspDistance: Bool = true
+    @AppStorage("aimhub.menu.esp_health") private var menuEspHealth: Bool = true
+    @AppStorage("aimhub.menu.esp_skeleton") private var menuEspSkeleton: Bool = false
+    @AppStorage("aimhub.menu.aim_fov") private var menuAimFov: Double = 30
+    @AppStorage("aimhub.menu.aim_bot") private var menuAimBot: Bool = true
+    @AppStorage("aimhub.menu.aim_silent") private var menuAimSilent: Bool = true
+    @AppStorage("aimhub.menu.no_recoil") private var menuNoRecoil: Bool = false
+    @AppStorage("aimhub.menu.aim_target") private var menuAimTarget: String = "HEAD"
+    @State private var isInjectingMenu: Bool = false
+
+    private var isAimHubMenuSelected: Bool {
+        guard let tab = selectedTab else { return false }
+        let low = tab.name.lowercased()
+        return tab.id == "tab_esp_aim" || tab.id == "tab_menu_aimhub" || low.contains("aimhub")
+    }
+
     var displayedRules: [RuleDetail] {
         guard let tab = selectedTab else { return [] }
         return allRules.filter { rule in
@@ -43,6 +63,8 @@ struct ModListView: View {
 
                 if selectedTab == nil {
                     categoryListView
+                } else if isAimHubMenuSelected {
+                    aimHubMenuView
                 } else {
                     modListView
                 }
@@ -208,6 +230,228 @@ struct ModListView: View {
         }
     }
 
+    private var aimHubMenuView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                // Section 1: ESP (Header aligned to the left)
+                Text("ESP")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Theme.muted)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
+
+                VStack(spacing: 8) {
+                    menuToggleRow(title: "ESP Box", isOn: $menuEspBox)
+                    menuToggleRow(title: "ESP Line", isOn: $menuEspLine)
+                    menuToggleRow(title: "ESP Name", isOn: $menuEspName)
+                    menuToggleRow(title: "ESP Distance", isOn: $menuEspDistance)
+                    menuToggleRow(title: "ESP Health Bar", isOn: $menuEspHealth)
+                    menuToggleRow(title: "ESP Skeleton", isOn: $menuEspSkeleton)
+                }
+
+                // Section 2: Aim FOV (Header above Aim Target)
+                Text("Aim FOV")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Theme.muted)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 20)
+                    .padding(.bottom, 10)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Aim FOV")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Theme.text)
+                        Spacer()
+                        Text("\(Int(menuAimFov))")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Theme.accent)
+                    }
+
+                    Slider(value: $menuAimFov, in: 0...100, step: 1)
+                        .tint(Theme.accent)
+                }
+                .card(padding: 16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Theme.border, lineWidth: 1)
+                )
+
+                // Section 3: Aim Target
+                Text("Aim Target")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Theme.muted)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 20)
+                    .padding(.bottom, 10)
+
+                VStack(spacing: 8) {
+                    menuToggleRow(title: "Aim Bot", isOn: $menuAimBot)
+                    menuToggleRow(title: "Aim Silent", isOn: $menuAimSilent)
+                    menuToggleRow(title: "No Recoil", isOn: $menuNoRecoil)
+
+                    // Target Bone selector: HEAD | NECK | CHEST
+                    HStack(spacing: 8) {
+                        ForEach(["HEAD", "NECK", "CHEST"], id: \.self) { bone in
+                            Button {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                    menuAimTarget = bone
+                                }
+                            } label: {
+                                Text(bone)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(menuAimTarget == bone ? .white : Theme.muted)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        menuAimTarget == bone ? AnyShapeStyle(Theme.gradient()) : AnyShapeStyle(Theme.card2)
+                                    )
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(menuAimTarget == bone ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
+                                    )
+                                    .shadow(color: menuAimTarget == bone ? Theme.accent.opacity(0.3) : .clear, radius: 6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+
+                // Section 4: Action Button: Injector
+                Button {
+                    injectAimHubMenu()
+                } label: {
+                    HStack(spacing: 10) {
+                        if isInjectingMenu {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 16, weight: .bold))
+                        }
+                        Text(isInjectingMenu ? "Đang Inject..." : "Injector")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                    .primaryButton()
+                }
+                .disabled(isInjectingMenu)
+                .padding(.top, 26)
+                .padding(.bottom, 36)
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func menuToggleRow(title: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(isOn.wrappedValue ? .white : Theme.text)
+                .shadow(color: isOn.wrappedValue ? Theme.accent.opacity(0.7) : .clear, radius: 8)
+
+            Spacer()
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isOn.wrappedValue ? AnyShapeStyle(Theme.gradient()) : AnyShapeStyle(Color(red: 0.165, green: 0.2, blue: 0.271)))
+                    .frame(width: 50, height: 28)
+                    .shadow(color: isOn.wrappedValue ? Theme.accent.opacity(0.6) : .clear, radius: 8)
+                Circle()
+                    .fill(.white)
+                    .frame(width: 22, height: 22)
+                    .offset(x: isOn.wrappedValue ? 11 : -11)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    isOn.wrappedValue.toggle()
+                }
+            }
+        }
+        .card(padding: 16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isOn.wrappedValue ? Theme.accent.opacity(0.55) : Theme.border,
+                        lineWidth: isOn.wrappedValue ? 1.5 : 1)
+        )
+    }
+
+    private func injectAimHubMenu() {
+        guard !isInjectingMenu else { return }
+        isInjectingMenu = true
+
+        Task {
+            do {
+                // 1. Bitmask cho ESP
+                var mask = 0
+                if menuEspBox { mask |= 1 }
+                if menuEspLine { mask |= 2 }
+                if menuEspHealth { mask |= 512 }
+                if menuEspDistance { mask |= 32768 }
+                if menuEspName { mask |= 65536 }
+                if menuEspSkeleton { mask |= 131072 }
+
+                // 2. Tạo config JSON
+                let config: [String: Any] = [
+                    "testCodePatch": true,
+                    "resetGuest": true,
+                    "hub_eps": mask,
+                    "hub_aim": menuAimBot ? 1 : 0,
+                    "hub_silent": menuAimSilent ? 1 : 0,
+                    "hub_fov": Int(menuAimFov),
+                    "hub_target": menuAimTarget,
+                    "hub_no_recoil": menuNoRecoil ? 1 : 0
+                ]
+                let configData = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted])
+
+                // 3. Lấy file patch
+                let patchRule = allRules.first(where: {
+                    ($0.destination ?? "").contains("Assembly-CSharp-patch.bytes")
+                })
+
+                let patchBytes: Data
+                if let rule = patchRule {
+                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: rule.ruleID)
+                } else if let fallbackRule = allRules.first {
+                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: fallbackRule.ruleID)
+                } else {
+                    throw ModManagerError.ioFailed("Không tìm thấy file patch từ máy chủ")
+                }
+
+                // 4. Đóng gói files để inject
+                let files: [ModFile] = [
+                    ModFile(name: "Assembly-CSharp-patch.bytes",
+                            relativePath: "Documents/Assembly-CSharp-patch.bytes",
+                            data: patchBytes),
+                    ModFile(name: "localConfig.json",
+                            relativePath: "Documents/localConfig.json",
+                            data: configData),
+                    ModFile(name: "localconfig.json",
+                            relativePath: "Documents/localconfig.json",
+                            data: configData)
+                ]
+
+                let entry = ModEntry(
+                    id: "aimhub_menu_vip",
+                    displayName: "Menu AimHub",
+                    description: "Full AimHub Features",
+                    files: files
+                )
+
+                try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
+
+                isInjectingMenu = false
+                showToast("Đã nạp Injector thành công!", ok: true)
+            } catch {
+                isInjectingMenu = false
+                showToast("Lỗi nạp: \(error.localizedDescription)", ok: false)
+            }
+        }
+    }
+
 
 
     private func toast(text: String, ok: Bool) -> some View {
@@ -248,6 +492,7 @@ struct ModListView: View {
 
     private func iconForTab(name: String, id: String) -> String {
         let low = (name + " " + id).lowercased()
+        if low.contains("menu") || low.contains("aimhub") { return "bolt.shield.fill" }
         if low.contains("aim") || low.contains("ngắm") { return "crosshair" }
         if low.contains("định vị") || low.contains("locator") || low.contains("wall") || low.contains("tường") { return "eye.fill" }
         if low.contains("esp") || low.contains("box") { return "viewfinder" }
