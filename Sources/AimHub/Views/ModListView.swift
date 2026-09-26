@@ -33,6 +33,7 @@ struct ModListView: View {
     @AppStorage("aimhub.menu.aim_silent") private var menuAimSilent: Bool = false
     @AppStorage("aimhub.menu.no_recoil") private var menuNoRecoil: Bool = false
     @AppStorage("aimhub.menu.aim_target") private var menuAimTarget: String = "HEAD"
+    @AppStorage("aimhub.menu.is_injected") private var isMenuInjected: Bool = false
     @State private var isInjectingMenu: Bool = false
 
     private var isAimHubMenuSelected: Bool {
@@ -320,22 +321,37 @@ struct ModListView: View {
                     .padding(.top, 4)
                 }
 
-                // Section 4: Action Button: Injector
+                // Section 4: Action Button: Injector / Uninjector Toggle
                 Button {
-                    injectAimHubMenu()
+                    if isMenuInjected {
+                        uninjectAimHubMenu()
+                    } else {
+                        injectAimHubMenu()
+                    }
                 } label: {
                     HStack(spacing: 10) {
                         if isInjectingMenu {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Image(systemName: "bolt.fill")
+                            Image(systemName: isMenuInjected ? "eject.fill" : "bolt.fill")
                                 .font(.system(size: 16, weight: .bold))
                         }
-                        Text(isInjectingMenu ? "Đang Inject..." : "Injector")
+                        Text(isInjectingMenu
+                             ? (isMenuInjected ? "Đang gỡ bỏ..." : "Đang Inject...")
+                             : (isMenuInjected ? "Uninjector" : "Injector"))
                             .font(.system(size: 16, weight: .bold))
                     }
-                    .primaryButton()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        isMenuInjected
+                        ? AnyShapeStyle(LinearGradient(colors: [Color.red.opacity(0.85), Color(red: 0.7, green: 0.1, blue: 0.2)], startPoint: .leading, endPoint: .trailing))
+                        : AnyShapeStyle(Theme.gradient())
+                    )
+                    .foregroundColor(.white)
+                    .cornerRadius(14)
+                    .shadow(color: isMenuInjected ? Color.red.opacity(0.4) : Theme.accent.opacity(0.4), radius: 10, y: 4)
                 }
                 .disabled(isInjectingMenu)
                 .padding(.top, 26)
@@ -409,18 +425,17 @@ struct ModListView: View {
 
                 // 3. Lấy file patch (Ưu tiên rule 39KB của Menu AimHub)
                 let patchRule = allRules.first(where: {
-                    $0.tabID == "tab_menu_aimhub" || $0.ruleID.contains("aimhub")
+                    $0.tabID == "tab_menu_aimhub" || $0.ruleID.contains("aimhub") || $0.slot == "menu_aimhub"
                 }) ?? allRules.first(where: {
-                    ($0.destination ?? "").contains("Assembly-CSharp-patch.bytes")
+                    ($0.destination ?? "").contains("Assembly-CSharp-patch.bytes") && ($0.size ?? 0) > 20000
                 })
 
                 let patchBytes: Data
                 if let rule = patchRule {
                     patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: rule.ruleID)
-                } else if let fallbackRule = allRules.first {
-                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: fallbackRule.ruleID)
                 } else {
-                    throw ModManagerError.ioFailed("Không tìm thấy file patch từ máy chủ")
+                    let fallbackID = game.bundleID.contains("max") ? "rule_menu_aimhub_vip_max" : "rule_menu_aimhub_vip"
+                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: fallbackID)
                 }
 
                 // 4. Đóng gói files để inject
@@ -445,11 +460,32 @@ struct ModListView: View {
 
                 try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
 
+                isMenuInjected = true
                 isInjectingMenu = false
                 showToast("Đã nạp Injector thành công!", ok: true)
             } catch {
                 isInjectingMenu = false
                 showToast("Lỗi nạp: \(error.localizedDescription)", ok: false)
+            }
+        }
+    }
+
+    private func uninjectAimHubMenu() {
+        guard !isInjectingMenu else { return }
+        isInjectingMenu = true
+
+        Task {
+            do {
+                try ModManager.shared.restoreFile(relativePath: "Documents/Assembly-CSharp-patch.bytes", bundleID: game.bundleID, mode: "inject")
+                try? ModManager.shared.restoreFile(relativePath: "Documents/localConfig.json", bundleID: game.bundleID, mode: "inject")
+                try? ModManager.shared.restoreFile(relativePath: "Documents/localconfig.json", bundleID: game.bundleID, mode: "inject")
+
+                isMenuInjected = false
+                isInjectingMenu = false
+                showToast("Đã gỡ bỏ Injector thành công!", ok: true)
+            } catch {
+                isInjectingMenu = false
+                showToast("Lỗi gỡ: \(error.localizedDescription)", ok: false)
             }
         }
     }
@@ -810,6 +846,7 @@ struct ModListView: View {
         Task {
             do {
                 try await appState.restoreAll()
+                isMenuInjected = false
                 busyModID = nil
                 showToast(L10n.t("mod.allRestored"))
             } catch {
