@@ -21,24 +21,24 @@ struct ModListView: View {
     @State private var toastText: String?
     @State private var toastOK = true
 
-    // Menu AimHub State (Persisted via AppStorage)
-    @AppStorage("aimhub.menu.esp_box") private var menuEspBox: Bool = true
-    @AppStorage("aimhub.menu.esp_line") private var menuEspLine: Bool = true
-    @AppStorage("aimhub.menu.esp_name") private var menuEspName: Bool = true
-    @AppStorage("aimhub.menu.esp_distance") private var menuEspDistance: Bool = true
-    @AppStorage("aimhub.menu.esp_health") private var menuEspHealth: Bool = true
+    // Menu AimHub State (Persisted via AppStorage, default ALL OFF)
+    @AppStorage("aimhub.menu.esp_box") private var menuEspBox: Bool = false
+    @AppStorage("aimhub.menu.esp_line") private var menuEspLine: Bool = false
+    @AppStorage("aimhub.menu.esp_name") private var menuEspName: Bool = false
+    @AppStorage("aimhub.menu.esp_distance") private var menuEspDistance: Bool = false
+    @AppStorage("aimhub.menu.esp_health") private var menuEspHealth: Bool = false
     @AppStorage("aimhub.menu.esp_skeleton") private var menuEspSkeleton: Bool = false
-    @AppStorage("aimhub.menu.aim_fov") private var menuAimFov: Double = 30
-    @AppStorage("aimhub.menu.aim_bot") private var menuAimBot: Bool = true
-    @AppStorage("aimhub.menu.aim_silent") private var menuAimSilent: Bool = true
+    @AppStorage("aimhub.menu.aim_fov") private var menuAimFov: Double = 0
+    @AppStorage("aimhub.menu.aim_bot") private var menuAimBot: Bool = false
+    @AppStorage("aimhub.menu.aim_silent") private var menuAimSilent: Bool = false
     @AppStorage("aimhub.menu.no_recoil") private var menuNoRecoil: Bool = false
     @AppStorage("aimhub.menu.aim_target") private var menuAimTarget: String = "HEAD"
     @State private var isInjectingMenu: Bool = false
 
     private var isAimHubMenuSelected: Bool {
         guard let tab = selectedTab else { return false }
-        let low = tab.name.lowercased()
-        return tab.id == "tab_esp_aim" || tab.id == "tab_menu_aimhub" || low.contains("aimhub")
+        let low = tab.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return tab.id == "tab_menu_aimhub" || low == "menu aimhub"
     }
 
     var displayedRules: [RuleDetail] {
