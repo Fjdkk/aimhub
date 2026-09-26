@@ -480,6 +480,8 @@ public final class ServerClient: @unchecked Sendable {
             }
             return data
         }
+    }
+
     public func fetchMenuSchema(tabID: String = "tab_menu_aimhub") async -> MenuSchema {
         do {
             let schema: MenuSchema = try await get("/api/menu-schema/\(tabID)")
