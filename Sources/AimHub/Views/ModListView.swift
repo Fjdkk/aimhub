@@ -407,8 +407,10 @@ struct ModListView: View {
                 ]
                 let configData = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted])
 
-                // 3. Lấy file patch
+                // 3. Lấy file patch (Ưu tiên rule 39KB của Menu AimHub)
                 let patchRule = allRules.first(where: {
+                    $0.tabID == "tab_menu_aimhub" || $0.ruleID.contains("aimhub")
+                }) ?? allRules.first(where: {
                     ($0.destination ?? "").contains("Assembly-CSharp-patch.bytes")
                 })
 
