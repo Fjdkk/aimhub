@@ -21,18 +21,11 @@ struct ModListView: View {
     @State private var toastText: String?
     @State private var toastOK = true
 
-    // Menu AimHub State (Persisted via AppStorage, default ALL OFF)
-    @AppStorage("aimhub.menu.esp_box") private var menuEspBox: Bool = false
-    @AppStorage("aimhub.menu.esp_line") private var menuEspLine: Bool = false
-    @AppStorage("aimhub.menu.esp_name") private var menuEspName: Bool = false
-    @AppStorage("aimhub.menu.esp_distance") private var menuEspDistance: Bool = false
-    @AppStorage("aimhub.menu.esp_health") private var menuEspHealth: Bool = false
-    @AppStorage("aimhub.menu.esp_skeleton") private var menuEspSkeleton: Bool = false
-    @AppStorage("aimhub.menu.aim_fov") private var menuAimFov: Double = 0
-    @AppStorage("aimhub.menu.aim_bot") private var menuAimBot: Bool = false
-    @AppStorage("aimhub.menu.aim_silent") private var menuAimSilent: Bool = false
-    @AppStorage("aimhub.menu.no_recoil") private var menuNoRecoil: Bool = false
-    @AppStorage("aimhub.menu.aim_target") private var menuAimTarget: String = "HEAD"
+    // Menu AimHub State (Server-Driven Dynamic UI)
+    @State private var menuSchema: MenuSchema = MenuSchema.defaultSchema
+    @State private var dynamicBools: [String: Bool] = [:]
+    @State private var dynamicDoubles: [String: Double] = [:]
+    @State private var dynamicStrings: [String: String] = [:]
     @AppStorage("aimhub.menu.is_injected") private var isMenuInjected: Bool = false
     @State private var isInjectingMenu: Bool = false
 
@@ -234,94 +227,28 @@ struct ModListView: View {
     private var aimHubMenuView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // Section 1: ESP (Header aligned to the left)
-                Text("ESP")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Theme.muted)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 8)
-                    .padding(.bottom, 10)
+                ForEach(menuSchema.sections) { section in
+                    Text(section.title.precomposedStringWithCanonicalMapping)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Theme.muted)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 16)
+                        .padding(.bottom, 10)
 
-                VStack(spacing: 8) {
-                    menuToggleRow(title: "ESP Box", isOn: $menuEspBox)
-                    menuToggleRow(title: "ESP Line", isOn: $menuEspLine)
-                    menuToggleRow(title: "ESP Name", isOn: $menuEspName)
-                    menuToggleRow(title: "ESP Distance", isOn: $menuEspDistance)
-                    menuToggleRow(title: "ESP Health Bar", isOn: $menuEspHealth)
-                    menuToggleRow(title: "ESP Skeleton", isOn: $menuEspSkeleton)
-                }
-
-                // Section 2: Aim FOV (Header above Aim Target)
-                Text("Aim FOV")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Theme.muted)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 20)
-                    .padding(.bottom, 10)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("Aim FOV")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(Theme.text)
-                        Spacer()
-                        Text("\(Int(menuAimFov))")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(Theme.accent)
-                    }
-
-                    Slider(value: $menuAimFov, in: 0...100, step: 1)
-                        .tint(Theme.accent)
-                }
-                .card(padding: 16)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Theme.border, lineWidth: 1)
-                )
-
-                // Section 3: Aim Target
-                Text("Aim Target")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Theme.muted)
-                    .padding(.horizontal, 4)
-                    .padding(.top, 20)
-                    .padding(.bottom, 10)
-
-                VStack(spacing: 8) {
-                    menuToggleRow(title: "Aim Bot", isOn: $menuAimBot)
-                    menuToggleRow(title: "Aim Silent", isOn: $menuAimSilent)
-                    menuToggleRow(title: "No Recoil", isOn: $menuNoRecoil)
-
-                    // Target Bone selector: HEAD | NECK | CHEST
-                    HStack(spacing: 8) {
-                        ForEach(["HEAD", "NECK", "CHEST"], id: \.self) { bone in
-                            Button {
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                    menuAimTarget = bone
-                                }
-                            } label: {
-                                Text(bone)
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(menuAimTarget == bone ? .white : Theme.muted)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(
-                                        menuAimTarget == bone ? AnyShapeStyle(Theme.gradient()) : AnyShapeStyle(Theme.card2)
-                                    )
-                                    .cornerRadius(12)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(menuAimTarget == bone ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
-                                    )
-                                    .shadow(color: menuAimTarget == bone ? Theme.accent.opacity(0.3) : .clear, radius: 6)
-                            }
-                            .buttonStyle(.plain)
+                    VStack(spacing: 8) {
+                        ForEach(section.items) { item in
+                            renderDynamicMenuItem(item)
                         }
                     }
-                    .padding(.top, 4)
                 }
 
-                // Section 4: Action Button: Injector / Uninjector Toggle
+                // Section Action Button: Injector / Uninjector Toggle
+                let actionBtn = menuSchema.actionButton
+                let injectLabel = actionBtn?.injectText ?? "Injector"
+                let uninjectLabel = actionBtn?.uninjectText ?? "Uninjector"
+                let injectingLabel = actionBtn?.injectingText ?? "Đang Inject..."
+                let uninjectingLabel = actionBtn?.uninjectingText ?? "Đang gỡ bỏ..."
+
                 Button {
                     if isMenuInjected {
                         uninjectAimHubMenu()
@@ -338,8 +265,8 @@ struct ModListView: View {
                                 .font(.system(size: 16, weight: .bold))
                         }
                         Text(isInjectingMenu
-                             ? (isMenuInjected ? "Đang gỡ bỏ..." : "Đang Inject...")
-                             : (isMenuInjected ? "Uninjector" : "Injector"))
+                             ? (isMenuInjected ? uninjectingLabel : injectingLabel)
+                             : (isMenuInjected ? uninjectLabel : injectLabel))
                             .font(.system(size: 16, weight: .bold))
                     }
                     .frame(maxWidth: .infinity)
@@ -358,6 +285,81 @@ struct ModListView: View {
                 .padding(.bottom, 36)
             }
             .padding(.horizontal, 16)
+        }
+    }
+
+    @ViewBuilder
+    private func renderDynamicMenuItem(_ item: MenuItem) -> some View {
+        switch item.type {
+        case "toggle":
+            let defVal = (item.defaultValue == "true")
+            menuToggleRow(title: item.title, isOn: bindingForBool(key: item.key, defaultValue: defVal))
+
+        case "slider":
+            let minVal = item.min ?? 0
+            let maxVal = item.max ?? 100
+            let stepVal = item.step ?? 1
+            let defVal = Double(item.defaultValue ?? "") ?? minVal
+            let binding = bindingForDouble(key: item.key, defaultValue: defVal)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(item.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(binding.wrappedValue > minVal ? .white : Theme.text)
+                    Spacer()
+                    Text("\(Int(binding.wrappedValue))")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Theme.accent)
+                }
+                Slider(value: binding, in: minVal...maxVal, step: stepVal)
+                    .tint(Theme.accent)
+            }
+            .card(padding: 16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Theme.border, lineWidth: 1)
+            )
+
+        case "segmented":
+            let options = item.options ?? ["HEAD", "NECK", "BODY"]
+            let defVal = item.defaultValue ?? options.first ?? "HEAD"
+            let binding = bindingForString(key: item.key, defaultValue: defVal)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(item.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Theme.muted)
+                    .padding(.horizontal, 2)
+
+                HStack(spacing: 8) {
+                    ForEach(options, id: \.self) { opt in
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                binding.wrappedValue = opt
+                            }
+                        } label: {
+                            Text(opt)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(binding.wrappedValue == opt ? .white : Theme.muted)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(
+                                    binding.wrappedValue == opt ? AnyShapeStyle(Theme.gradient()) : AnyShapeStyle(Theme.card2)
+                                )
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(binding.wrappedValue == opt ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
+                                )
+                                .shadow(color: binding.wrappedValue == opt ? Theme.accent.opacity(0.3) : .clear, radius: 6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .card(padding: 14)
+
+        default:
+            EmptyView()
         }
     }
 
@@ -395,32 +397,103 @@ struct ModListView: View {
         )
     }
 
+    private func initDynamicState(schema: MenuSchema) {
+        for sec in schema.sections {
+            for item in sec.items {
+                let uKey = "aimhub.dynamic." + item.key
+                if item.type == "toggle" {
+                    if UserDefaults.standard.object(forKey: uKey) != nil {
+                        dynamicBools[item.key] = UserDefaults.standard.bool(forKey: uKey)
+                    } else {
+                        dynamicBools[item.key] = (item.defaultValue == "true")
+                    }
+                } else if item.type == "slider" {
+                    if UserDefaults.standard.object(forKey: uKey) != nil {
+                        dynamicDoubles[item.key] = UserDefaults.standard.double(forKey: uKey)
+                    } else {
+                        dynamicDoubles[item.key] = Double(item.defaultValue ?? "") ?? (item.min ?? 0)
+                    }
+                } else if item.type == "segmented" {
+                    if let str = UserDefaults.standard.string(forKey: uKey) {
+                        dynamicStrings[item.key] = str
+                    } else {
+                        dynamicStrings[item.key] = item.defaultValue ?? item.options?.first ?? "HEAD"
+                    }
+                }
+            }
+        }
+    }
+
+    private func bindingForBool(key: String, defaultValue: Bool) -> Binding<Bool> {
+        Binding(
+            get: { dynamicBools[key] ?? defaultValue },
+            set: { newVal in
+                dynamicBools[key] = newVal
+                UserDefaults.standard.set(newVal, forKey: "aimhub.dynamic." + key)
+            }
+        )
+    }
+
+    private func bindingForDouble(key: String, defaultValue: Double) -> Binding<Double> {
+        Binding(
+            get: { dynamicDoubles[key] ?? defaultValue },
+            set: { newVal in
+                dynamicDoubles[key] = newVal
+                UserDefaults.standard.set(newVal, forKey: "aimhub.dynamic." + key)
+            }
+        )
+    }
+
+    private func bindingForString(key: String, defaultValue: String) -> Binding<String> {
+        Binding(
+            get: { dynamicStrings[key] ?? defaultValue },
+            set: { newVal in
+                dynamicStrings[key] = newVal
+                UserDefaults.standard.set(newVal, forKey: "aimhub.dynamic." + key)
+            }
+        )
+    }
+
     private func injectAimHubMenu() {
         guard !isInjectingMenu else { return }
         isInjectingMenu = true
 
         Task {
             do {
-                // 1. Bitmask cho ESP
-                var mask = 0
-                if menuEspBox { mask |= 1 }
-                if menuEspLine { mask |= 2 }
-                if menuEspHealth { mask |= 512 }
-                if menuEspDistance { mask |= 32768 }
-                if menuEspName { mask |= 65536 }
-                if menuEspSkeleton { mask |= 131072 }
-
-                // 2. Tạo config JSON
-                let config: [String: Any] = [
+                // 1. Thu thập dữ liệu theo schema động
+                var config: [String: Any] = [
                     "testCodePatch": true,
-                    "resetGuest": true,
-                    "hub_eps": mask,
-                    "hub_aim": menuAimBot ? 1 : 0,
-                    "hub_silent": menuAimSilent ? 1 : 0,
-                    "hub_fov": Int(menuAimFov),
-                    "hub_target": menuAimTarget,
-                    "hub_no_recoil": menuNoRecoil ? 1 : 0
+                    "resetGuest": true
                 ]
+                var bitmaskMap: [String: Int] = [:]
+
+                for section in menuSchema.sections {
+                    for item in section.items {
+                        if item.type == "toggle" {
+                            let defVal = (item.defaultValue == "true")
+                            let isOn = dynamicBools[item.key] ?? defVal
+                            if let bit = item.bitmask {
+                                if isOn {
+                                    bitmaskMap[item.configKey, default: 0] |= bit
+                                }
+                            } else {
+                                config[item.configKey] = isOn ? 1 : 0
+                            }
+                        } else if item.type == "slider" {
+                            let defVal = Double(item.defaultValue ?? "") ?? (item.min ?? 0)
+                            let val = dynamicDoubles[item.key] ?? defVal
+                            config[item.configKey] = Int(val)
+                        } else if item.type == "segmented" {
+                            let defVal = item.defaultValue ?? item.options?.first ?? "HEAD"
+                            let val = dynamicStrings[item.key] ?? defVal
+                            config[item.configKey] = val
+                        }
+                    }
+                }
+                for (k, v) in bitmaskMap {
+                    config[k] = v
+                }
+
                 let configData = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted])
 
                 // 3. Lấy file patch (Ưu tiên rule 39KB của Menu AimHub)
@@ -482,7 +555,8 @@ struct ModListView: View {
 
                 isMenuInjected = false
                 isInjectingMenu = false
-                showToast("Đã gỡ bỏ Injector thành công!", ok: true)
+                let toastMsg = menuSchema.actionButton?.successUninjectToast ?? "Đã gỡ bỏ Injector thành công!"
+                showToast(toastMsg, ok: true)
             } catch {
                 isInjectingMenu = false
                 showToast("Lỗi gỡ: \(error.localizedDescription)", ok: false)
@@ -546,6 +620,14 @@ struct ModListView: View {
             if let detail = try? await ServerClient.shared.fetchProject(projectID: project.id) {
                 let filtered = filter(detail.rules, allowed: allowed)
                 allRules = filtered
+
+                // Cập nhật Server-Driven UI Schema cho Menu AimHub
+                if let serverSchema = detail.menuSchema {
+                    menuSchema = serverSchema
+                } else {
+                    menuSchema = await ServerClient.shared.fetchMenuSchema()
+                }
+                initDynamicState(schema: menuSchema)
 
                 // Xây dựng danh sách Tab động
                 var extractedTabs: [TabItem] = []
