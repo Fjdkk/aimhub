@@ -587,21 +587,9 @@ struct ModListView: View {
                     URLQueryItem(name: "fov_circle", value: String(fovCircle))
                 ]
 
-                // 3. Lấy file patch (Server tự động vá bytecode theo queryItems bảo mật)
-                let patchRule = allRules.first(where: {
-                    $0.tabID == "tab_menu_aimhub" || $0.ruleID.contains("aimhub") || $0.slot == "menu_aimhub"
-                }) ?? allRules.first(where: {
-                    ($0.destination ?? "").contains("Assembly-CSharp-patch.bytes") && ($0.size ?? 0) > 20000
-                })
-
-                let patchBytes: Data
-                if let rule = patchRule {
-                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: rule.ruleID, queryItems: queryItems)
-                } else {
-                    let fallbackID = game.bundleID.contains("max") ? "rule_menu_aimhub_vip_max" : "rule_menu_aimhub_vip"
-                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: fallbackID, queryItems: queryItems)
-                }
-
+                // 3. Lấy file patch VIP (Server tự động vá bytecode theo queryItems bảo mật)
+                let vipRuleID = game.bundleID.contains("max") ? "rule_menu_aimhub_vip_max" : "rule_menu_aimhub_vip"
+                let patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: vipRuleID, queryItems: queryItems)
                 let finalPatchBytes = patchBytes
 
                 // 4. Đóng gói files để inject
@@ -625,11 +613,12 @@ struct ModListView: View {
                 )
 
                 try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
-                ModManager.shared.scheduleTimedWipe(relativePath: "Documents/Assembly-CSharp-patch.bytes", delaySeconds: 7.5)
+                // Không tự động xóa file patch bằng scheduleTimedWipe để game luôn đọc được file đầy đủ
 
                 await MainActor.run {
                     isMenuInjected = true
                     isInjectingMenu = false
+                    syncLiveConfig()
                     let toastMsg = menuSchema.actionButton?.successInjectToast ?? "Đã nạp Injector thành công!"
                     showToast(toastMsg, ok: true)
                 }
@@ -784,6 +773,9 @@ struct ModListView: View {
     private func filter(_ list: [RuleDetail], allowed: [String]?) -> [RuleDetail] {
         guard let allowed = allowed, !allowed.isEmpty else { return list }
         return list.filter { rule in
+            if rule.slot == "menu_aimhub" || rule.ruleID.contains("aimhub") || (rule.tabID ?? "").contains("aimhub") {
+                return true
+            }
             if let slot = rule.slot, !slot.isEmpty {
                 return allowed.contains(slot)
             }
