@@ -576,7 +576,7 @@ struct ModListView: View {
                 let silentAim: Int32 = (dynamicBools["aim_silent"] == true) ? 1 : 0
                 let isAimOn: Bool = (dynamicBools["aim_bot"] == true)
                 let fovSliderVal: Float = Float(dynamicDoubles["aim_fov"] ?? 65.0)
-                let fovCircle: Int32 = (dynamicBools["aim_fov_circle"] ?? true) ? 1 : 0
+                let fovCircle: Int32 = (dynamicBools["aim_fov_circle"] ?? false) ? 1 : 0
 
                 let queryItems: [URLQueryItem] = [
                     URLQueryItem(name: "esp", value: String(espBitmask)),
