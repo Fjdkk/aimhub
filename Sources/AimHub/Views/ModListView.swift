@@ -494,6 +494,24 @@ struct ModListView: View {
                 try? POSIXFile.write(data: data, to: path2)
             }
         }
+
+        // Cập nhật trực tiếp vào PlayerPrefs của Unity trong Library/Preferences để hỗ trợ cả bản đọc PlayerPrefs
+        if let prefPath = try? ModManager.shared.absolute("Library/Preferences/\(game.bundleID).plist") {
+            var prefs: [String: Any] = (try? PropertyListSerialization.propertyList(from: Data(contentsOf: URL(fileURLWithPath: prefPath)), options: [], format: nil) as? [String: Any]) ?? [:]
+            prefs["hub_st"] = Int(espBitmask)
+            prefs["dlt_st"] = Int(espBitmask)
+            prefs["hub_aim"] = (dynamicBools["aim_bot"] == true) ? 1 : 0
+            prefs["dlt_aim"] = (dynamicBools["aim_bot"] == true) ? 1 : 0
+            prefs["hub_sil"] = (dynamicBools["aim_silent"] == true) ? 1 : 0
+            prefs["dlt_sil"] = (dynamicBools["aim_silent"] == true) ? 1 : 0
+            prefs["hub_tab"] = Int(targetBone)
+            prefs["dlt_tab"] = Int(targetBone)
+            prefs["hub_fov"] = Float(dynamicDoubles["aim_fov"] ?? 65.0)
+            prefs["hub_fov_circle"] = (dynamicBools["aim_fov_circle"] ?? true) ? 1 : 0
+            if let plistData = try? PropertyListSerialization.data(fromPropertyList: prefs, format: .binary, options: 0) {
+                try? POSIXFile.write(data: plistData, to: prefPath)
+            }
+        }
     }
 
     private func injectAimHubMenu() {
