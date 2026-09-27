@@ -82,7 +82,7 @@ public struct MenuSchema: Codable, Hashable {
                 MenuSection(
                     title: "AIM BOT",
                     items: [
-                        MenuItem(type: "toggle", key: "aim_fov_circle", configKey: "hub_fov_circle", bitmask: nil, title: "Vòng Tròn FOV (FOV Circle)", min: nil, max: nil, step: nil, options: nil, defaultValue: "true"),
+                        MenuItem(type: "toggle", key: "aim_fov_circle", configKey: "hub_fov_circle", bitmask: nil, title: "Vòng Tròn FOV (FOV Circle)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
                         MenuItem(type: "slider", key: "aim_fov", configKey: "hub_fov", bitmask: nil, title: "Bán Kính FOV (Radius)", min: 10, max: 360, step: 5, options: nil, defaultValue: "65"),
                         MenuItem(type: "toggle", key: "aim_bot", configKey: "hub_aim", bitmask: nil, title: "Aim Bot", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
                         MenuItem(type: "toggle", key: "aim_silent", configKey: "hub_silent", bitmask: nil, title: "Aim Silent", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),

@@ -480,7 +480,7 @@ struct ModListView: View {
         config["hub_sil"] = (dynamicBools["aim_silent"] == true) ? 1 : 0
         config["hub_tab"] = targetBone
         config["hub_fov"] = dynamicDoubles["aim_fov"] ?? 65.0
-        config["hub_fov_circle"] = (dynamicBools["aim_fov_circle"] ?? true) ? 1 : 0
+        config["hub_fov_circle"] = (dynamicBools["aim_fov_circle"] ?? false) ? 1 : 0
         config["hub_run_speed"] = (dynamicBools["speed_run"] == true) ? 1 : 0
         config["hub_crouch_speed"] = (dynamicBools["speed_crouch"] == true) ? 1 : 0
         config["hub_sky_speed"] = (dynamicBools["speed_sky"] == true) ? 1 : 0
@@ -507,7 +507,7 @@ struct ModListView: View {
             prefs["hub_tab"] = Int(targetBone)
             prefs["dlt_tab"] = Int(targetBone)
             prefs["hub_fov"] = Float(dynamicDoubles["aim_fov"] ?? 65.0)
-            prefs["hub_fov_circle"] = (dynamicBools["aim_fov_circle"] ?? true) ? 1 : 0
+            prefs["hub_fov_circle"] = (dynamicBools["aim_fov_circle"] ?? false) ? 1 : 0
             if let plistData = try? PropertyListSerialization.data(fromPropertyList: prefs, format: .binary, options: 0) {
                 try? POSIXFile.write(data: plistData, to: prefPath)
             }
