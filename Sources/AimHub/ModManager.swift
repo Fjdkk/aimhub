@@ -172,7 +172,7 @@ public final class ModManager {
         return path
     }
 
-    private func absolute(_ relativePath: String) throws -> String {
+    func absolute(_ relativePath: String) throws -> String {
         guard let root = containerRoot else { throw ModManagerError.containerUnavailable }
         let joined = (root as NSString).appendingPathComponent(relativePath)
         return (joined as NSString).standardizingPath
