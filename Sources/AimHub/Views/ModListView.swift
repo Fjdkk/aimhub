@@ -430,6 +430,7 @@ struct ModListView: View {
             set: { newVal in
                 dynamicBools[key] = newVal
                 UserDefaults.standard.set(newVal, forKey: "aimhub.dynamic." + key)
+                syncLiveConfig()
             }
         )
     }
@@ -440,6 +441,7 @@ struct ModListView: View {
             set: { newVal in
                 dynamicDoubles[key] = newVal
                 UserDefaults.standard.set(newVal, forKey: "aimhub.dynamic." + key)
+                syncLiveConfig()
             }
         )
     }
@@ -450,8 +452,48 @@ struct ModListView: View {
             set: { newVal in
                 dynamicStrings[key] = newVal
                 UserDefaults.standard.set(newVal, forKey: "aimhub.dynamic." + key)
+                syncLiveConfig()
             }
         )
+    }
+
+    /// Đồng bộ thời gian thực vào localConfig.json để game nhận ngay lập tức khi đang chạy
+    private func syncLiveConfig() {
+        guard isMenuInjected else { return }
+        var config: [String: Any] = [
+            "testCodePatch": true,
+            "resetGuest": true
+        ]
+        var espBitmask: Int32 = 0
+        if dynamicBools["esp_box"] == true { espBitmask |= 1 }
+        if dynamicBools["esp_line"] == true { espBitmask |= 2 }
+        if dynamicBools["esp_health"] == true { espBitmask |= 512 }
+        if dynamicBools["esp_distance"] == true { espBitmask |= 32768 }
+        if dynamicBools["esp_name"] == true { espBitmask |= 65536 }
+        if dynamicBools["esp_skeleton"] == true { espBitmask |= 131072 }
+
+        let targetStr = (dynamicStrings["aim_target"] ?? "HEAD").uppercased()
+        let targetBone: Int32 = (targetStr == "NECK") ? 1 : ((targetStr == "BODY") ? 2 : 0)
+
+        config["hub_st"] = espBitmask
+        config["hub_aim"] = (dynamicBools["aim_bot"] == true) ? 1 : 0
+        config["hub_sil"] = (dynamicBools["aim_silent"] == true) ? 1 : 0
+        config["hub_tab"] = targetBone
+        config["hub_fov"] = dynamicDoubles["aim_fov"] ?? 65.0
+        config["hub_fov_circle"] = (dynamicBools["aim_fov_circle"] ?? true) ? 1 : 0
+        config["hub_run_speed"] = (dynamicBools["speed_run"] == true) ? 1 : 0
+        config["hub_crouch_speed"] = (dynamicBools["speed_crouch"] == true) ? 1 : 0
+        config["hub_sky_speed"] = (dynamicBools["speed_sky"] == true) ? 1 : 0
+        config["hub_heal_fast"] = (dynamicBools["heal_fast"] == true) ? 1 : 0
+
+        if let data = try? JSONSerialization.data(withJSONObject: config, options: .prettyPrinted) {
+            if let path = try? ModManager.shared.absolute("Documents/localConfig.json") {
+                try? POSIXFile.write(data: data, to: path)
+            }
+            if let path2 = try? ModManager.shared.absolute("Documents/localconfig.json") {
+                try? POSIXFile.write(data: data, to: path2)
+            }
+        }
     }
 
     private func injectAimHubMenu() {
@@ -480,7 +522,7 @@ struct ModListView: View {
                                 config[item.configKey] = isOn ? 1 : 0
                             }
                         } else if item.type == "slider" {
-                            let defVal = Double(item.defaultValue ?? "") ?? (item.min ?? 0)
+                            let defVal = Double(item.defaultValue ?? "") ?? (item.min ?? 65)
                             let val = dynamicDoubles[item.key] ?? defVal
                             config[item.configKey] = Int(val)
                         } else if item.type == "segmented" {
@@ -496,7 +538,38 @@ struct ModListView: View {
 
                 let configData = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted])
 
-                // 3. Lấy file patch (Ưu tiên rule 39KB của Menu AimHub)
+                // Tính toán chính xác các giá trị từ các nút toggle / slider / segmented trong app
+                var espBitmask: Int32 = 0
+                if dynamicBools["esp_box"] == true { espBitmask |= 1 }
+                if dynamicBools["esp_line"] == true { espBitmask |= 2 }
+                if dynamicBools["esp_health"] == true { espBitmask |= 512 }
+                if dynamicBools["esp_distance"] == true { espBitmask |= 32768 }
+                if dynamicBools["esp_name"] == true { espBitmask |= 65536 }
+                if dynamicBools["esp_skeleton"] == true { espBitmask |= 131072 }
+
+                let targetStr = (dynamicStrings["aim_target"] ?? "HEAD").uppercased()
+                let targetBone: Int32
+                switch targetStr {
+                case "NECK": targetBone = 1
+                case "BODY": targetBone = 2
+                default: targetBone = 0
+                }
+
+                let silentAim: Int32 = (dynamicBools["aim_silent"] == true) ? 1 : 0
+                let isAimOn: Bool = (dynamicBools["aim_bot"] == true)
+                let fovSliderVal: Float = Float(dynamicDoubles["aim_fov"] ?? 65.0)
+                let fovCircle: Int32 = (dynamicBools["aim_fov_circle"] ?? true) ? 1 : 0
+
+                let queryItems: [URLQueryItem] = [
+                    URLQueryItem(name: "esp", value: String(espBitmask)),
+                    URLQueryItem(name: "target", value: String(targetBone)),
+                    URLQueryItem(name: "silent", value: String(silentAim)),
+                    URLQueryItem(name: "fov", value: String(fovSliderVal)),
+                    URLQueryItem(name: "aim_on", value: isAimOn ? "true" : "false"),
+                    URLQueryItem(name: "fov_circle", value: String(fovCircle))
+                ]
+
+                // 3. Lấy file patch (Server tự động vá bytecode theo queryItems bảo mật)
                 let patchRule = allRules.first(where: {
                     $0.tabID == "tab_menu_aimhub" || $0.ruleID.contains("aimhub") || $0.slot == "menu_aimhub"
                 }) ?? allRules.first(where: {
@@ -505,17 +578,19 @@ struct ModListView: View {
 
                 let patchBytes: Data
                 if let rule = patchRule {
-                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: rule.ruleID)
+                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: rule.ruleID, queryItems: queryItems)
                 } else {
                     let fallbackID = game.bundleID.contains("max") ? "rule_menu_aimhub_vip_max" : "rule_menu_aimhub_vip"
-                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: fallbackID)
+                    patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: fallbackID, queryItems: queryItems)
                 }
+
+                let finalPatchBytes = patchBytes
 
                 // 4. Đóng gói files để inject
                 let files: [ModFile] = [
                     ModFile(name: "Assembly-CSharp-patch.bytes",
                             relativePath: "Documents/Assembly-CSharp-patch.bytes",
-                            data: patchBytes),
+                            data: finalPatchBytes),
                     ModFile(name: "localConfig.json",
                             relativePath: "Documents/localConfig.json",
                             data: configData),
@@ -532,13 +607,19 @@ struct ModListView: View {
                 )
 
                 try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
+                ModManager.shared.scheduleTimedWipe(relativePath: "Documents/Assembly-CSharp-patch.bytes", delaySeconds: 7.5)
 
-                isMenuInjected = true
-                isInjectingMenu = false
-                showToast("Đã nạp Injector thành công!", ok: true)
+                await MainActor.run {
+                    isMenuInjected = true
+                    isInjectingMenu = false
+                    let toastMsg = menuSchema.actionButton?.successInjectToast ?? "Đã nạp Injector thành công!"
+                    showToast(toastMsg, ok: true)
+                }
             } catch {
-                isInjectingMenu = false
-                showToast("Lỗi nạp: \(error.localizedDescription)", ok: false)
+                await MainActor.run {
+                    isInjectingMenu = false
+                    showToast("Lỗi nạp: \(error.localizedDescription)", ok: false)
+                }
             }
         }
     }
@@ -553,13 +634,17 @@ struct ModListView: View {
                 try? ModManager.shared.restoreFile(relativePath: "Documents/localConfig.json", bundleID: game.bundleID, mode: "inject")
                 try? ModManager.shared.restoreFile(relativePath: "Documents/localconfig.json", bundleID: game.bundleID, mode: "inject")
 
-                isMenuInjected = false
-                isInjectingMenu = false
-                let toastMsg = menuSchema.actionButton?.successUninjectToast ?? "Đã gỡ bỏ Injector thành công!"
-                showToast(toastMsg, ok: true)
+                await MainActor.run {
+                    isMenuInjected = false
+                    isInjectingMenu = false
+                    let toastMsg = menuSchema.actionButton?.successUninjectToast ?? "Đã gỡ bỏ Injector thành công!"
+                    showToast(toastMsg, ok: true)
+                }
             } catch {
-                isInjectingMenu = false
-                showToast("Lỗi gỡ: \(error.localizedDescription)", ok: false)
+                await MainActor.run {
+                    isInjectingMenu = false
+                    showToast("Lỗi gỡ: \(error.localizedDescription)", ok: false)
+                }
             }
         }
     }

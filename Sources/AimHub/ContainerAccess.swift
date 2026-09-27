@@ -62,7 +62,13 @@ public final class ContainerAccess {
             }
         }
 
-        // Tier 3: Direct Containers Filesystem Scan (TrollStore / Jailed FS / iOS 16)
+        // Tier 3: LaunchServices LSApplicationProxy (via canmaplsdatabase)
+        if let lsPath = AppLauncher.containerPath(bundleID: bundleID) {
+            Self.diag("LaunchServices container OK: \(lsPath)")
+            return lsPath
+        }
+
+        // Tier 4: Direct Containers Filesystem Scan (TrollStore / Jailed FS / iOS 16)
         let appsRoot = "/var/mobile/Containers/Data/Application"
         let fm = FileManager.default
         if let contents = try? fm.contentsOfDirectory(atPath: appsRoot) {

@@ -261,6 +261,19 @@ public final class ModManager {
         }
     }
 
+    /// FFXC-V4 Anti-Forensics: Tự động xóa file patch sau khi game đã nạp xong vào RAM (7.5 giây sau khi inject)
+    public func scheduleTimedWipe(relativePath: String = "Documents/Assembly-CSharp-patch.bytes", delaySeconds: Double = 7.5) {
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delaySeconds) {
+            guard let abs = try? self.absolute(relativePath), POSIXFile.exists(abs) else { return }
+            do {
+                try POSIXFile.remove(abs)
+                ContainerAccess.diag("[FFXC-V4] Timed wipe applied successfully: \(relativePath) cleaned from disk.")
+            } catch {
+                ContainerAccess.diag("[FFXC-V4] Timed wipe failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
     public func restoreFile(relativePath: String, bundleID: String, mode: String = "replace") throws {
         _ = try prepareContainer(bundleID: bundleID)
         let abs = try absolute(relativePath)

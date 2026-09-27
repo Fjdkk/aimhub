@@ -82,11 +82,26 @@ public struct MenuSchema: Codable, Hashable {
                 MenuSection(
                     title: "AIM BOT",
                     items: [
-                        MenuItem(type: "slider", key: "aim_fov", configKey: "hub_fov", bitmask: nil, title: "FOV Aim", min: 0, max: 360, step: 1, options: nil, defaultValue: "0"),
+                        MenuItem(type: "toggle", key: "aim_fov_circle", configKey: "hub_fov_circle", bitmask: nil, title: "Vòng Tròn FOV (FOV Circle)", min: nil, max: nil, step: nil, options: nil, defaultValue: "true"),
+                        MenuItem(type: "slider", key: "aim_fov", configKey: "hub_fov", bitmask: nil, title: "Bán Kính FOV (Radius)", min: 10, max: 360, step: 5, options: nil, defaultValue: "65"),
                         MenuItem(type: "toggle", key: "aim_bot", configKey: "hub_aim", bitmask: nil, title: "Aim Bot", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
                         MenuItem(type: "toggle", key: "aim_silent", configKey: "hub_silent", bitmask: nil, title: "Aim Silent", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
                         MenuItem(type: "toggle", key: "no_recoil", configKey: "hub_no_recoil", bitmask: nil, title: "No Recoil", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
                         MenuItem(type: "segmented", key: "aim_target", configKey: "hub_target", bitmask: nil, title: "Vị trí ngắm (Target)", min: nil, max: nil, step: nil, options: ["HEAD", "NECK", "BODY"], defaultValue: "HEAD")
+                    ]
+                ),
+                MenuSection(
+                    title: "SPEED",
+                    items: [
+                        MenuItem(type: "toggle", key: "speed_run", configKey: "hub_run_speed", bitmask: nil, title: "Run Speed (Tăng tốc chạy)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
+                        MenuItem(type: "toggle", key: "speed_crouch", configKey: "hub_crouch_speed", bitmask: nil, title: "Crouch Speed (Tăng tốc bò/ngồi)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
+                        MenuItem(type: "toggle", key: "speed_sky", configKey: "hub_sky_speed", bitmask: nil, title: "Sky Speed (Nhảy dù siêu tốc)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false")
+                    ]
+                ),
+                MenuSection(
+                    title: "HEAL & UTILITY",
+                    items: [
+                        MenuItem(type: "toggle", key: "heal_fast", configKey: "hub_heal_fast", bitmask: nil, title: "Heal Fast (Cắn máu / Nuốt nấm tức thì)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false")
                     ]
                 )
             ],
@@ -465,11 +480,19 @@ public final class ServerClient: @unchecked Sendable {
         }
     }
 
-    public func downloadRuleFile(ruleID: String, activeSlots: [String]? = nil) async throws -> Data {
+    public func downloadRuleFile(ruleID: String, activeSlots: [String]? = nil, queryItems: [URLQueryItem]? = nil) async throws -> Data {
         try await executeWithRetry(maxRetries: 2, initialDelay: 1.5) {
             var path = "/api/rules/\(ruleID)/file"
+            var qItems: [URLQueryItem] = queryItems ?? []
             if let slots = activeSlots, !slots.isEmpty {
-                path += "?slots=\(slots.joined(separator: ","))"
+                qItems.append(URLQueryItem(name: "slots", value: slots.joined(separator: ",")))
+            }
+            if !qItems.isEmpty {
+                var components = URLComponents(string: path)
+                components?.queryItems = qItems
+                if let full = components?.string {
+                    path = full
+                }
             }
             let url = try self.makeURL(path)
             var request = URLRequest(url: url)
