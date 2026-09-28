@@ -508,12 +508,12 @@ public final class ServerClient: @unchecked Sendable {
                 if let expLenStr = http.value(forHTTPHeaderField: "Content-Length"),
                    let expLen = Int(expLenStr), expLen > 0 {
                     guard data.count == expLen else {
-                        throw ServerError.generic("Dữ liệu tải về không trọn vẹn (\(data.count)/\(expLen) bytes). Vui lòng thử lại.")
+                        throw ServerError.message("Dữ liệu tải về không trọn vẹn (\(data.count)/\(expLen) bytes). Vui lòng thử lại.")
                     }
                 }
             }
             guard !data.isEmpty else {
-                throw ServerError.generic("File nhận được từ máy chủ bị rỗng.")
+                throw ServerError.message("File nhận được từ máy chủ bị rỗng.")
             }
             return data
         }
