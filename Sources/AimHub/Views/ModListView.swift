@@ -1105,12 +1105,60 @@ struct ModListView: View {
         Task {
             do {
                 try await appState.restoreAll()
-                isMenuInjected = false
-                busyModID = nil
-                showToast(L10n.t("mod.allRestored"))
+                await MainActor.run {
+                    isMenuInjected = false
+                    
+                    // 1. Tắt sạch toàn bộ các công tắc UI và xóa bộ nhớ cache
+                    for section in menuSchema.sections {
+                        for item in section.items {
+                            if item.type == "toggle" {
+                                dynamicBools[item.key] = false
+                                UserDefaults.standard.removeObject(forKey: "aimhub.dynamic." + item.key)
+                            } else if item.type == "slider" {
+                                let minVal = item.min ?? 65
+                                dynamicDoubles[item.key] = minVal
+                                UserDefaults.standard.removeObject(forKey: "aimhub.dynamic." + item.key)
+                            } else if item.type == "segmented" {
+                                let defVal = item.defaultValue ?? item.options?.first ?? "HEAD"
+                                dynamicStrings[item.key] = defVal
+                                UserDefaults.standard.removeObject(forKey: "aimhub.dynamic." + item.key)
+                            }
+                        }
+                    }
+                    
+                    // 2. Tẩy trắng toàn bộ cờ cheat trong PlayerPrefs (plist) của game
+                    if let game = appState.activeGame,
+                       let prefPath = try? ModManager.shared.absolute("Library/Preferences/\(game.bundleID).plist") {
+                        if var prefs = (try? PropertyListSerialization.propertyList(from: Data(contentsOf: URL(fileURLWithPath: prefPath)), options: [], format: nil) as? [String: Any]) {
+                            let cheatKeys = [
+                                "hub_st", "hub_aim", "hub_tab", "hub_sil", "hub_nm",
+                                "hub_box", "hub_line", "hub_hp", "hub_dist", "hub_name", "hub_skel",
+                                "hub_fov", "hub_fov_circle", "hub_no_recoil",
+                                "hub_run_speed", "hub_crouch_speed", "hub_sky_speed", "hub_heal_fast",
+                                "dlt_st", "dlt_aim", "dlt_tab", "dlt_sil", "dlt_nm", "dlt_box", "dlt_line", "dlt_hp", "dlt_dist", "dlt_name", "dlt_skel"
+                            ]
+                            for k in cheatKeys {
+                                prefs.removeValue(forKey: k)
+                            }
+                            if let plistData = try? PropertyListSerialization.data(fromPropertyList: prefs, format: .binary, options: 0) {
+                                try? POSIXFile.write(data: plistData, to: prefPath)
+                            }
+                        }
+                    }
+                    
+                    // 3. Tẩy trắng file patch bằng Neutral Seed
+                    if let game = appState.activeGame {
+                        ModManager.shared.neutralizePatch(bundleID: game.bundleID)
+                    }
+                    
+                    busyModID = nil
+                    showToast(L10n.t("mod.allRestored"))
+                }
             } catch {
-                busyModID = nil
-                errorText = error.localizedDescription
+                await MainActor.run {
+                    busyModID = nil
+                    errorText = error.localizedDescription
+                }
             }
         }
     }
