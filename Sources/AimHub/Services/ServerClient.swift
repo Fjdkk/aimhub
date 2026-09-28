@@ -533,6 +533,7 @@ public final class ServerClient: @unchecked Sendable {
         case "license.key_not_found": return "Key không tồn tại"
         case "license.expired": return "Key đã hết hạn"
         case "license.device_mismatch": return "Key đã được kích hoạt trên thiết bị khác"
+        case "license.banned": return "Key này đã bị khóa do vi phạm hoặc có dấu hiệu gian lận"
         default: return detail
         }
     }
