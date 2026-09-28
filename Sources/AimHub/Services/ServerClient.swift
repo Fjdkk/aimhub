@@ -500,7 +500,7 @@ public final class ServerClient: @unchecked Sendable {
             if let key = KeyStorage.load()?.key {
                 request.setValue(key, forHTTPHeaderField: "X-License-Key")
             }
-            request.setValue(DeviceInfo.deviceID, forHTTPHeaderField: "X-Device-ID")
+            request.setValue(DeviceInfo.identifier, forHTTPHeaderField: "X-Device-ID")
             let (data, response) = try await self.session.data(for: request)
             if let http = response as? HTTPURLResponse {
                 guard http.statusCode == 200 else { throw ServerError.http(http.statusCode) }
