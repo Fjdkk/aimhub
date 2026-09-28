@@ -136,13 +136,13 @@ public enum DeviceInfo {
         guard let data = id.data(using: .utf8) else { return }
         var addQuery = keychainQuery()
         addQuery[kSecValueData as String] = data
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAlwaysThisDeviceOnly
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         let status = SecItemAdd(addQuery as CFDictionary, nil)
         if status == errSecDuplicateItem {
             let updateQuery = keychainQuery()
             let attrs: [String: Any] = [
                 kSecValueData as String: data,
-                kSecAttrAccessible as String: kSecAttrAccessibleAlwaysThisDeviceOnly
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             ]
             SecItemUpdate(updateQuery as CFDictionary, attrs as CFDictionary)
         }
