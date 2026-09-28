@@ -369,8 +369,26 @@ final class AppState: ObservableObject {
         guard heartbeatTask == nil else { return }
         heartbeatTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
-                self?.touchLastActive()
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                guard let self = self, let currentKey = self.activeKey else { break }
+                self.touchLastActive()
+                // Xác thực nhịp tim với máy chủ định kỳ (Session Heartbeat)
+                do {
+                    let updated = try await self.server.activateKey(key: currentKey.key, deviceID: DeviceInfo.identifier)
+                    await MainActor.run {
+                        self.activeKey = updated
+                        KeyStorage.save(updated)
+                    }
+                } catch {
+                    if let sErr = error as? ServerError, case .message(let msg) = sErr {
+                        if msg.contains("hết hạn") || msg.contains("không tồn tại") || msg.contains("thu hồi") {
+                            await MainActor.run {
+                                self.log("Key đã hết hạn hoặc bị thu hồi trên máy chủ: \(msg)", level: .error)
+                                self.expireSession()
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -398,16 +416,17 @@ final class AppState: ObservableObject {
     }
 
     private func expireSession() {
-        log("Phiên hoạt động đã hết hạn (quá 11 phút)")
+        log("Phiên hoạt động đã kết thúc hoặc key đã hết hạn")
         Task {
             await DNSAntiManager.shared.stopProtection()
         }
         let bundleID = activeGame?.bundleID
             ?? UserDefaults.standard.string(forKey: "activeBundleID")
-        if let bundleID = bundleID, !activeMods.isEmpty {
+        if let bundleID = bundleID {
             try? ModManager.shared.restoreAll(bundleID: bundleID)
+            ModManager.shared.neutralizePatch(bundleID: bundleID)
             saveActiveMods([:], for: bundleID)
-            log("Đã khôi phục file gốc khi hết phiên")
+            log("Đã khôi phục và vô hiệu hóa patch bảo vệ")
         }
         activeGame = nil
         activeKey = nil
