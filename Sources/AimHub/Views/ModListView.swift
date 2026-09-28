@@ -457,34 +457,82 @@ struct ModListView: View {
         )
     }
 
-    /// Đồng bộ thời gian thực vào localConfig.json để game nhận ngay lập tức khi đang chạy
+    /// Đồng bộ thời gian thực vào localConfig.json và PlayerPrefs để game nhận ngay lập tức khi đang chạy
     private func syncLiveConfig() {
-        guard isMenuInjected else { return }
-        var config: [String: Any] = [
-            "testCodePatch": true,
-            "resetGuest": true
-        ]
-        var espBitmask: Int32 = 0
-        if dynamicBools["esp_box"] == true { espBitmask |= 1 }
-        if dynamicBools["esp_line"] == true { espBitmask |= 2 }
-        if dynamicBools["esp_health"] == true { espBitmask |= 512 }
-        if dynamicBools["esp_distance"] == true { espBitmask |= 32768 }
-        if dynamicBools["esp_name"] == true { espBitmask |= 65536 }
-        if dynamicBools["esp_skeleton"] == true { espBitmask |= 131072 }
+        let isBox = (dynamicBools["esp_box"] == true)
+        let isLine = (dynamicBools["esp_line"] == true)
+        let isHealth = (dynamicBools["esp_health"] == true)
+        let isDistance = (dynamicBools["esp_distance"] == true)
+        let isName = (dynamicBools["esp_name"] == true)
+        let isSkeleton = (dynamicBools["esp_skeleton"] == true)
+        let isAimBot = (dynamicBools["aim_bot"] == true)
+        let isAimSilent = (dynamicBools["aim_silent"] == true)
+        let isNoRecoil = (dynamicBools["no_recoil"] == true)
+        let isFovCircle = (dynamicBools["aim_fov_circle"] ?? false)
+        let fovVal = dynamicDoubles["aim_fov"] ?? 65.0
+        let isSpeedRun = (dynamicBools["speed_run"] == true)
+        let isSpeedCrouch = (dynamicBools["speed_crouch"] == true)
+        let isSpeedSky = (dynamicBools["speed_sky"] == true)
+        let isHealFast = (dynamicBools["heal_fast"] == true)
 
         let targetStr = (dynamicStrings["aim_target"] ?? "HEAD").uppercased()
         let targetBone: Int32 = (targetStr == "NECK") ? 1 : ((targetStr == "BODY") ? 2 : 0)
 
-        config["hub_st"] = espBitmask
-        config["hub_aim"] = (dynamicBools["aim_bot"] == true) ? 1 : 0
-        config["hub_sil"] = (dynamicBools["aim_silent"] == true) ? 1 : 0
-        config["hub_tab"] = targetBone
-        config["hub_fov"] = dynamicDoubles["aim_fov"] ?? 65.0
-        config["hub_fov_circle"] = (dynamicBools["aim_fov_circle"] ?? false) ? 1 : 0
-        config["hub_run_speed"] = (dynamicBools["speed_run"] == true) ? 1 : 0
-        config["hub_crouch_speed"] = (dynamicBools["speed_crouch"] == true) ? 1 : 0
-        config["hub_sky_speed"] = (dynamicBools["speed_sky"] == true) ? 1 : 0
-        config["hub_heal_fast"] = (dynamicBools["heal_fast"] == true) ? 1 : 0
+        // Tính bitmask ESP chuẩn xác của game
+        var espBitmask: Int32 = 0
+        if isBox { espBitmask |= 1 }
+        if isLine { espBitmask |= 2 }
+        if isHealth { espBitmask |= 512 }
+        if isDistance { espBitmask |= 32768 }
+        if isName { espBitmask |= 65536 }
+        if isSkeleton { espBitmask |= 131072 }
+
+        var config: [String: Any] = [
+            "testCodePatch": true,
+            "resetGuest": true,
+            "esp_box": isBox ? 1 : 0,
+            "esp_line": isLine ? 1 : 0,
+            "esp_health": isHealth ? 1 : 0,
+            "esp_distance": isDistance ? 1 : 0,
+            "esp_name": isName ? 1 : 0,
+            "esp_skeleton": isSkeleton ? 1 : 0,
+            "esp_bitmask": Int(espBitmask),
+            "aim_bot": isAimBot ? 1 : 0,
+            "aim_silent": isAimSilent ? 1 : 0,
+            "aim_target": Int(targetBone),
+            "aim_fov": fovVal,
+            "aim_fov_circle": isFovCircle ? 1 : 0,
+            "no_recoil": isNoRecoil ? 1 : 0,
+            "speed_run": isSpeedRun ? 1 : 0,
+            "speed_crouch": isSpeedCrouch ? 1 : 0,
+            "speed_sky": isSpeedSky ? 1 : 0,
+            "heal_fast": isHealFast ? 1 : 0,
+            // Cờ hub_* cho patch VIP
+            "hub_box": isBox ? 1 : 0,
+            "hub_line": isLine ? 1 : 0,
+            "hub_hp": isHealth ? 1 : 0,
+            "hub_dist": isDistance ? 1 : 0,
+            "hub_name": isName ? 1 : 0,
+            "hub_skel": isSkeleton ? 1 : 0,
+            "hub_st": espBitmask,
+            "hub_aim": isAimBot ? 1 : 0,
+            "hub_sil": isAimSilent ? 1 : 0,
+            "hub_tab": targetBone,
+            "hub_fov": fovVal,
+            "hub_fov_circle": isFovCircle ? 1 : 0,
+            "hub_nm": isNoRecoil ? 1 : 0,
+            "hub_no_recoil": isNoRecoil ? 1 : 0,
+            "hub_run_speed": isSpeedRun ? 1 : 0,
+            "hub_crouch_speed": isSpeedCrouch ? 1 : 0,
+            "hub_sky_speed": isSpeedSky ? 1 : 0,
+            "hub_heal_fast": isHealFast ? 1 : 0,
+            // Cờ dlt_* dự phòng tương thích ngược
+            "dlt_st": espBitmask,
+            "dlt_aim": isAimBot ? 1 : 0,
+            "dlt_sil": isAimSilent ? 1 : 0,
+            "dlt_tab": targetBone,
+            "dlt_nm": isNoRecoil ? 1 : 0
+        ]
 
         if let data = try? JSONSerialization.data(withJSONObject: config, options: .prettyPrinted) {
             if let path = try? ModManager.shared.absolute("Documents/localConfig.json") {
@@ -495,19 +543,52 @@ struct ModListView: View {
             }
         }
 
-        // Cập nhật trực tiếp vào PlayerPrefs của Unity trong Library/Preferences để hỗ trợ cả bản đọc PlayerPrefs
+        // Cập nhật chi tiết từng cờ con vào PlayerPrefs của Unity trong Library/Preferences
         if let prefPath = try? ModManager.shared.absolute("Library/Preferences/\(game.bundleID).plist") {
             var prefs: [String: Any] = (try? PropertyListSerialization.propertyList(from: Data(contentsOf: URL(fileURLWithPath: prefPath)), options: [], format: nil) as? [String: Any]) ?? [:]
-            prefs["hub_st"] = Int(espBitmask)
+            
+            // 1. Cờ riêng từng tính năng ESP
+            prefs["dlt_box"] = isBox ? 1 : 0
+            prefs["hub_box"] = isBox ? 1 : 0
+            prefs["dlt_line"] = isLine ? 1 : 0
+            prefs["hub_line"] = isLine ? 1 : 0
+            prefs["dlt_hp"] = isHealth ? 1 : 0
+            prefs["hub_hp"] = isHealth ? 1 : 0
+            prefs["dlt_dist"] = isDistance ? 1 : 0
+            prefs["hub_dist"] = isDistance ? 1 : 0
+            prefs["dlt_name"] = isName ? 1 : 0
+            prefs["hub_name"] = isName ? 1 : 0
+            prefs["dlt_skel"] = isSkeleton ? 1 : 0
+            prefs["hub_skel"] = isSkeleton ? 1 : 0
             prefs["dlt_st"] = Int(espBitmask)
-            prefs["hub_aim"] = (dynamicBools["aim_bot"] == true) ? 1 : 0
-            prefs["dlt_aim"] = (dynamicBools["aim_bot"] == true) ? 1 : 0
-            prefs["hub_sil"] = (dynamicBools["aim_silent"] == true) ? 1 : 0
-            prefs["dlt_sil"] = (dynamicBools["aim_silent"] == true) ? 1 : 0
-            prefs["hub_tab"] = Int(targetBone)
+            prefs["hub_st"] = Int(espBitmask)
+
+            // 2. Cờ riêng từng tính năng AIM
+            prefs["dlt_aim"] = isAimBot ? 1 : 0
+            prefs["hub_aim"] = isAimBot ? 1 : 0
+            prefs["dlt_sil"] = isAimSilent ? 1 : 0
+            prefs["hub_sil"] = isAimSilent ? 1 : 0
             prefs["dlt_tab"] = Int(targetBone)
-            prefs["hub_fov"] = Float(dynamicDoubles["aim_fov"] ?? 65.0)
-            prefs["hub_fov_circle"] = (dynamicBools["aim_fov_circle"] ?? false) ? 1 : 0
+            prefs["hub_tab"] = Int(targetBone)
+            prefs["dlt_fov"] = Float(fovVal)
+            prefs["hub_fov"] = Float(fovVal)
+            prefs["dlt_fov_circle"] = isFovCircle ? 1 : 0
+            prefs["hub_fov_circle"] = isFovCircle ? 1 : 0
+            prefs["dlt_nm"] = isNoRecoil ? 1 : 0
+            prefs["hub_nm"] = isNoRecoil ? 1 : 0
+            prefs["dlt_no_recoil"] = isNoRecoil ? 1 : 0
+            prefs["hub_no_recoil"] = isNoRecoil ? 1 : 0
+
+            // 3. Cờ riêng tính năng Tốc độ & Tiện ích
+            prefs["dlt_speed_run"] = isSpeedRun ? 1 : 0
+            prefs["hub_run_speed"] = isSpeedRun ? 1 : 0
+            prefs["dlt_speed_crouch"] = isSpeedCrouch ? 1 : 0
+            prefs["hub_crouch_speed"] = isSpeedCrouch ? 1 : 0
+            prefs["dlt_speed_sky"] = isSpeedSky ? 1 : 0
+            prefs["hub_sky_speed"] = isSpeedSky ? 1 : 0
+            prefs["dlt_heal_fast"] = isHealFast ? 1 : 0
+            prefs["hub_heal_fast"] = isHealFast ? 1 : 0
+
             if let plistData = try? PropertyListSerialization.data(fromPropertyList: prefs, format: .binary, options: 0) {
                 try? POSIXFile.write(data: plistData, to: prefPath)
             }
@@ -640,6 +721,7 @@ struct ModListView: View {
                 try ModManager.shared.restoreFile(relativePath: "Documents/Assembly-CSharp-patch.bytes", bundleID: game.bundleID, mode: "inject")
                 try? ModManager.shared.restoreFile(relativePath: "Documents/localConfig.json", bundleID: game.bundleID, mode: "inject")
                 try? ModManager.shared.restoreFile(relativePath: "Documents/localconfig.json", bundleID: game.bundleID, mode: "inject")
+                ModManager.shared.neutralizePatch(bundleID: game.bundleID)
 
                 await MainActor.run {
                     isMenuInjected = false

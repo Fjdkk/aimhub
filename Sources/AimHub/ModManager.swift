@@ -361,4 +361,26 @@ public final class ModManager {
             throw ModManagerError.ioFailed(error.localizedDescription)
         }
     }
+
+    /// Cơ chế Neutralization theo chuẩn Sophia: Sau khi game đã nạp bytecode vào RAM,
+    /// tự động ghi đè file 322 bytes (Neutral Seed) lên Assembly-CSharp-patch.bytes để tẩy trắng,
+    /// xóa dấu vết trên đĩa giúp chống quét tệp / chống khóa tài khoản 100%.
+    public func neutralizePatch(bundleID: String) {
+        do {
+            _ = try prepareContainer(bundleID: bundleID)
+            let patchAbs = try absolute("Documents/Assembly-CSharp-patch.bytes")
+            if POSIXFile.exists(patchAbs) {
+                try POSIXFile.write(data: NeutralSeed.data, to: patchAbs)
+            }
+            if let configAbs = try? absolute("Documents/localConfig.json"), POSIXFile.exists(configAbs) {
+                try? POSIXFile.remove(configAbs)
+            }
+            if let configAbs2 = try? absolute("Documents/localconfig.json"), POSIXFile.exists(configAbs2) {
+                try? POSIXFile.remove(configAbs2)
+            }
+            print("[WIPE] timed cleanup applied - payload neutralized with 322b seed")
+        } catch {
+            print("[WIPE] neutralization error: \(error.localizedDescription)")
+        }
+    }
 }

@@ -71,12 +71,12 @@ public struct MenuSchema: Codable, Hashable {
                 MenuSection(
                     title: "ESP",
                     items: [
-                        MenuItem(type: "toggle", key: "esp_box", configKey: "hub_eps", bitmask: 1, title: "ESP Box", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_line", configKey: "hub_eps", bitmask: 2, title: "ESP Line", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_name", configKey: "hub_eps", bitmask: 65536, title: "ESP Name", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_distance", configKey: "hub_eps", bitmask: 32768, title: "ESP Distance", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_health", configKey: "hub_eps", bitmask: 512, title: "ESP Health Bar", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_skeleton", configKey: "hub_eps", bitmask: 131072, title: "ESP Skeleton", min: nil, max: nil, step: nil, options: nil, defaultValue: "false")
+                        MenuItem(type: "toggle", key: "esp_box", configKey: "hub_st", bitmask: 1, title: "ESP Box", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
+                        MenuItem(type: "toggle", key: "esp_line", configKey: "hub_st", bitmask: 2, title: "ESP Line", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
+                        MenuItem(type: "toggle", key: "esp_name", configKey: "hub_st", bitmask: 65536, title: "ESP Name", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
+                        MenuItem(type: "toggle", key: "esp_distance", configKey: "hub_st", bitmask: 32768, title: "ESP Distance", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
+                        MenuItem(type: "toggle", key: "esp_health", configKey: "hub_st", bitmask: 512, title: "ESP Health Bar", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
+                        MenuItem(type: "toggle", key: "esp_skeleton", configKey: "hub_st", bitmask: 131072, title: "ESP Skeleton", min: nil, max: nil, step: nil, options: nil, defaultValue: "false")
                     ]
                 ),
                 MenuSection(
@@ -85,9 +85,9 @@ public struct MenuSchema: Codable, Hashable {
                         MenuItem(type: "toggle", key: "aim_fov_circle", configKey: "hub_fov_circle", bitmask: nil, title: "Vòng Tròn FOV (FOV Circle)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
                         MenuItem(type: "slider", key: "aim_fov", configKey: "hub_fov", bitmask: nil, title: "Bán Kính FOV (Radius)", min: 10, max: 360, step: 5, options: nil, defaultValue: "65"),
                         MenuItem(type: "toggle", key: "aim_bot", configKey: "hub_aim", bitmask: nil, title: "Aim Bot", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "aim_silent", configKey: "hub_silent", bitmask: nil, title: "Aim Silent", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "no_recoil", configKey: "hub_no_recoil", bitmask: nil, title: "No Recoil", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "segmented", key: "aim_target", configKey: "hub_target", bitmask: nil, title: "Vị trí ngắm (Target)", min: nil, max: nil, step: nil, options: ["HEAD", "NECK", "BODY"], defaultValue: "HEAD")
+                        MenuItem(type: "toggle", key: "aim_silent", configKey: "hub_sil", bitmask: nil, title: "Aim Silent", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
+                        MenuItem(type: "toggle", key: "no_recoil", configKey: "hub_nm", bitmask: nil, title: "No Recoil", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
+                        MenuItem(type: "segmented", key: "aim_target", configKey: "hub_tab", bitmask: nil, title: "Vị trí ngắm (Target)", min: nil, max: nil, step: nil, options: ["HEAD", "NECK", "BODY"], defaultValue: "HEAD")
                     ]
                 ),
                 MenuSection(
@@ -497,6 +497,10 @@ public final class ServerClient: @unchecked Sendable {
             let url = try self.makeURL(path)
             var request = URLRequest(url: url)
             request.timeoutInterval = 45
+            if let key = KeyStorage.load()?.key {
+                request.setValue(key, forHTTPHeaderField: "X-License-Key")
+            }
+            request.setValue(DeviceInfo.deviceID, forHTTPHeaderField: "X-Device-ID")
             let (data, response) = try await self.session.data(for: request)
             if let http = response as? HTTPURLResponse {
                 guard http.statusCode == 200 else { throw ServerError.http(http.statusCode) }
