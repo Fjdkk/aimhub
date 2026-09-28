@@ -113,7 +113,7 @@ public struct MenuSchema: Codable, Hashable {
                 successInjectToast: "Đã nạp Injector thành công!",
                 successUninjectToast: "Đã gỡ bỏ Injector thành công!"
             )
-        )
+        )   
     }
 }
 
@@ -481,7 +481,7 @@ public final class ServerClient: @unchecked Sendable {
     }
 
     public func downloadRuleFile(ruleID: String, activeSlots: [String]? = nil, queryItems: [URLQueryItem]? = nil) async throws -> Data {
-        try await executeWithRetry(maxRetries: 2, initialDelay: 1.5) {
+        try await executeWithRetry(maxRetries: 3, initialDelay: 1.0) {
             var path = "/api/rules/\(ruleID)/file"
             var qItems: [URLQueryItem] = queryItems ?? []
             if let slots = activeSlots, !slots.isEmpty {
@@ -497,6 +497,7 @@ public final class ServerClient: @unchecked Sendable {
             let url = try self.makeURL(path)
             var request = URLRequest(url: url)
             request.timeoutInterval = 45
+            request.cachePolicy = .reloadIgnoringLocalCacheData
             if let key = KeyStorage.load()?.key {
                 request.setValue(key, forHTTPHeaderField: "X-License-Key")
             }
@@ -504,6 +505,15 @@ public final class ServerClient: @unchecked Sendable {
             let (data, response) = try await self.session.data(for: request)
             if let http = response as? HTTPURLResponse {
                 guard http.statusCode == 200 else { throw ServerError.http(http.statusCode) }
+                if let expLenStr = http.value(forHTTPHeaderField: "Content-Length"),
+                   let expLen = Int(expLenStr), expLen > 0 {
+                    guard data.count == expLen else {
+                        throw ServerError.generic("Dữ liệu tải về không trọn vẹn (\(data.count)/\(expLen) bytes). Vui lòng thử lại.")
+                    }
+                }
+            }
+            guard !data.isEmpty else {
+                throw ServerError.generic("File nhận được từ máy chủ bị rỗng.")
             }
             return data
         }

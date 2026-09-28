@@ -543,56 +543,6 @@ struct ModListView: View {
             }
         }
 
-        // Cập nhật chi tiết từng cờ con vào PlayerPrefs của Unity trong Library/Preferences
-        if let prefPath = try? ModManager.shared.absolute("Library/Preferences/\(game.bundleID).plist") {
-            var prefs: [String: Any] = (try? PropertyListSerialization.propertyList(from: Data(contentsOf: URL(fileURLWithPath: prefPath)), options: [], format: nil) as? [String: Any]) ?? [:]
-            
-            // 1. Cờ riêng từng tính năng ESP
-            prefs["dlt_box"] = isBox ? 1 : 0
-            prefs["hub_box"] = isBox ? 1 : 0
-            prefs["dlt_line"] = isLine ? 1 : 0
-            prefs["hub_line"] = isLine ? 1 : 0
-            prefs["dlt_hp"] = isHealth ? 1 : 0
-            prefs["hub_hp"] = isHealth ? 1 : 0
-            prefs["dlt_dist"] = isDistance ? 1 : 0
-            prefs["hub_dist"] = isDistance ? 1 : 0
-            prefs["dlt_name"] = isName ? 1 : 0
-            prefs["hub_name"] = isName ? 1 : 0
-            prefs["dlt_skel"] = isSkeleton ? 1 : 0
-            prefs["hub_skel"] = isSkeleton ? 1 : 0
-            prefs["dlt_st"] = Int(espBitmask)
-            prefs["hub_st"] = Int(espBitmask)
-
-            // 2. Cờ riêng từng tính năng AIM
-            prefs["dlt_aim"] = isAimBot ? 1 : 0
-            prefs["hub_aim"] = isAimBot ? 1 : 0
-            prefs["dlt_sil"] = isAimSilent ? 1 : 0
-            prefs["hub_sil"] = isAimSilent ? 1 : 0
-            prefs["dlt_tab"] = Int(targetBone)
-            prefs["hub_tab"] = Int(targetBone)
-            prefs["dlt_fov"] = Float(fovVal)
-            prefs["hub_fov"] = Float(fovVal)
-            prefs["dlt_fov_circle"] = isFovCircle ? 1 : 0
-            prefs["hub_fov_circle"] = isFovCircle ? 1 : 0
-            prefs["dlt_nm"] = isNoRecoil ? 1 : 0
-            prefs["hub_nm"] = isNoRecoil ? 1 : 0
-            prefs["dlt_no_recoil"] = isNoRecoil ? 1 : 0
-            prefs["hub_no_recoil"] = isNoRecoil ? 1 : 0
-
-            // 3. Cờ riêng tính năng Tốc độ & Tiện ích
-            prefs["dlt_speed_run"] = isSpeedRun ? 1 : 0
-            prefs["hub_run_speed"] = isSpeedRun ? 1 : 0
-            prefs["dlt_speed_crouch"] = isSpeedCrouch ? 1 : 0
-            prefs["hub_crouch_speed"] = isSpeedCrouch ? 1 : 0
-            prefs["dlt_speed_sky"] = isSpeedSky ? 1 : 0
-            prefs["hub_sky_speed"] = isSpeedSky ? 1 : 0
-            prefs["dlt_heal_fast"] = isHealFast ? 1 : 0
-            prefs["hub_heal_fast"] = isHealFast ? 1 : 0
-
-            if let plistData = try? PropertyListSerialization.data(fromPropertyList: prefs, format: .binary, options: 0) {
-                try? POSIXFile.write(data: plistData, to: prefPath)
-            }
-        }
     }
 
     private func injectAimHubMenu() {
@@ -694,7 +644,8 @@ struct ModListView: View {
                 )
 
                 try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
-                // Không tự động xóa file patch bằng scheduleTimedWipe để game luôn đọc được file đầy đủ
+                // Tự động xóa file patch sau 15 giây (Anti-Forensics / Anti-File-Scan) khi game đã nạp RAM
+                ModManager.shared.scheduleTimedWipe(relativePath: "Documents/Assembly-CSharp-patch.bytes", delaySeconds: 15.0)
 
                 await MainActor.run {
                     isMenuInjected = true
@@ -1063,6 +1014,7 @@ struct ModListView: View {
                             }
                             let entry = ModEntry(id: firstRemaining.ruleID, displayName: firstRemaining.name, description: "", files: files)
                             try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
+                            ModManager.shared.scheduleTimedWipe(relativePath: "Documents/Assembly-CSharp-patch.bytes", delaySeconds: 15.0)
                         }
                     }
                     busyModID = nil
@@ -1090,6 +1042,9 @@ struct ModListView: View {
 
                 let modEntry = try await buildModEntry(rule, game: game)
                 try await appState.installMod(modEntry, rule: rule)
+                if (rule.destination ?? "").contains("Assembly-CSharp-patch.bytes") {
+                    ModManager.shared.scheduleTimedWipe(relativePath: "Documents/Assembly-CSharp-patch.bytes", delaySeconds: 15.0)
+                }
                 busyModID = nil
                 showToast(String(format: L10n.t("mod.on"), rule.name))
             } catch {
