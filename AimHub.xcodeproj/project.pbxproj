@@ -28,6 +28,7 @@
 		54D2871E0C6A4B2F9D5E7B3A02 /* 71F249E2ED17150978E493B1 in Sources */ = {isa = PBXBuildFile; fileRef = 71F249E2ED17150978E493B1 /* 71F249E2ED17150978E493B1 */; };
 		54D2871E0C6A4B2F9D5E7B3A03 /* D91A403F9A951F41B2FE9918 in Sources */ = {isa = PBXBuildFile; fileRef = D91A403F9A951F41B2FE9918 /* DNSAntiManager.swift */; };
 		54D2871E0C6A4B2F9D5E7B3A04 /* D91A403F9A951F41B2FE9919 in Sources */ = {isa = PBXBuildFile; fileRef = D91A403F9A951F41B2FE9919 /* NeutralSeed.swift */; };
+		54D2871E0C6A4B2F9D5E7B3A05 /* F91A403F9A951F41B2FE9920 in Sources */ = {isa = PBXBuildFile; fileRef = F91A403F9A951F41B2FE9920 /* LanguageSelectionView.swift */; };
 		965B9B53D904471DA199DF3C /* AimHub.app in Products */ = {isa = PBXBuildFile; fileRef = 27DD02B19B314642BBCCB9C4 /* AimHub.app */; };
 		740DBBA844ED413ABC362D5B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 70E2E2CC2BE542F29E9B82C8 /* Assets.xcassets */; };
 		FD2D6726F7A04166B7F4E3B5 /* Mods in Resources */ = {isa = PBXBuildFile; fileRef = 995819BB7761420FAD8DD80C /* Mods */; };
@@ -55,6 +56,7 @@
 		392423919BAC4636BB57A7E4 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SettingsView.swift; sourceTree = "<group>"; };
 		F3009CC50B90409B8C6C6E2F /* SubViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SubViews.swift; sourceTree = "<group>"; };
 		F73F58310DF7472DAAACA4B9 /* UpdateBlockedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/UpdateBlockedView.swift; sourceTree = "<group>"; };
+		F91A403F9A951F41B2FE9920 /* LanguageSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/LanguageSelectionView.swift; sourceTree = "<group>"; };
 		27DD02B19B314642BBCCB9C4 /* AimHub.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AimHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		ADBB83ED3B51454FBB9D9354 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		70E2E2CC2BE542F29E9B82C8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -114,6 +116,7 @@
 				392423919BAC4636BB57A7E4 /* Views/SettingsView.swift */,
 				F3009CC50B90409B8C6C6E2F /* Views/SubViews.swift */,
 				F73F58310DF7472DAAACA4B9 /* Views/UpdateBlockedView.swift */,
+				F91A403F9A951F41B2FE9920 /* Views/LanguageSelectionView.swift */,
 			);
 			path = Sources/AimHub;
 			sourceTree = "<group>";
@@ -207,6 +210,7 @@
 				54D2871E0C6A4B2F9D5E7B3A02 /* 71F249E2ED17150978E493B1 in Sources */,
 				54D2871E0C6A4B2F9D5E7B3A03 /* D91A403F9A951F41B2FE9918 in Sources */,
 				54D2871E0C6A4B2F9D5E7B3A04 /* D91A403F9A951F41B2FE9919 in Sources */,
+				54D2871E0C6A4B2F9D5E7B3A05 /* F91A403F9A951F41B2FE9920 in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
