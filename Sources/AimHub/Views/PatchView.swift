@@ -113,9 +113,16 @@ struct PatchView: View {
                     appState.selectGame(game)
                     appState.openGame()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
+                        Image(gameLogoName(game.bundleID))
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 15, height: 15)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+
                         Image(systemName: "play.fill")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
+
                         Text("Vào Game")
                             .font(.system(size: 11, weight: .bold))
                     }

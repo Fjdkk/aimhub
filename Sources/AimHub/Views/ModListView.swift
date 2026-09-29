@@ -72,13 +72,11 @@ struct ModListView: View {
     private var categoryListView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                quickLaunchBanner
-
                 Text("DANH MỤC CHỨC NĂNG")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Theme.muted)
                     .padding(.horizontal, 4)
-                    .padding(.top, 4)
+                    .padding(.top, 12)
                     .padding(.bottom, 6)
 
                 Text("Chọn một danh mục bên dưới để xem và kích hoạt các mod")
@@ -148,6 +146,16 @@ struct ModListView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(Theme.text)
 
+                        if tab.id == "tab_aim" || tab.name.lowercased().contains("aim") {
+                            Text("• Vào game trước nhé")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(Theme.green)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Theme.green.opacity(0.14))
+                                .cornerRadius(6)
+                        }
+
                         if activeCount > 0 {
                             Text("\(activeCount) đang bật")
                                 .font(.system(size: 10, weight: .bold))
@@ -179,6 +187,23 @@ struct ModListView: View {
     private var modListView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                if selectedTab?.id == "tab_aim" || (selectedTab?.name.lowercased().contains("aim") ?? false) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.green)
+                        Text("Vào game trước nhé")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(Theme.green)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Theme.green.opacity(0.14))
+                    .cornerRadius(8)
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 12)
+                }
+
                 Text(L10n.t("mod.oneAtATime"))
                     .font(.system(size: 12))
                     .foregroundColor(Theme.muted)
@@ -869,14 +894,21 @@ struct ModListView: View {
             Button {
                 launchGame()
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
+                    Image(gameLogoName(game.bundleID))
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 17, height: 17)
+                        .clipShape(RoundedRectangle(cornerRadius: 3.5))
+
                     Image(systemName: "play.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
+
                     Text("Vào Game")
                         .font(.system(size: 12, weight: .bold))
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 11)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(
                     LinearGradient(colors: [Theme.green, Theme.accent], startPoint: .leading, endPoint: .trailing)
@@ -1194,8 +1226,15 @@ struct ModListView: View {
             launchGame()
         } label: {
             HStack(spacing: 8) {
+                Image(gameLogoName(game.bundleID))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+
                 Image(systemName: "play.fill")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 12, weight: .bold))
+
                 Text("VÀO GAME NGAY")
                     .font(.system(size: 13, weight: .bold))
             }
@@ -1208,72 +1247,6 @@ struct ModListView: View {
             .cornerRadius(12)
             .shadow(color: Theme.green.opacity(0.35), radius: 6, y: 2)
         }
-    }
-
-    private var quickLaunchBanner: some View {
-        Button {
-            launchGame()
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(colors: [Theme.green, Theme.accent], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
-                        .frame(width: 38, height: 38)
-                        .shadow(color: Theme.green.opacity(0.4), radius: 6, y: 2)
-
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
-                        .offset(x: 1)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("VÀO GAME NGAY")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                        Text("KHỞI CHẠY")
-                            .font(.system(size: 9, weight: .black))
-                            .foregroundColor(Theme.green)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1.5)
-                            .background(Theme.green.opacity(0.18))
-                            .cornerRadius(4)
-                    }
-                    Text("Khởi động \(game.name) và áp dụng các mod đã chọn")
-                        .font(.system(size: 11))
-                        .foregroundColor(Theme.muted)
-                }
-
-                Spacer()
-
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Theme.green)
-                    .padding(7)
-                    .background(Theme.green.opacity(0.12))
-                    .clipShape(Circle())
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Theme.card)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(
-                                LinearGradient(colors: [Theme.green.opacity(0.65), Theme.accent.opacity(0.4)], startPoint: .leading, endPoint: .trailing),
-                                lineWidth: 1.2
-                            )
-                    )
-            )
-            .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
-        }
-        .padding(.horizontal, 4)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
     }
 
     private func launchGame() {
