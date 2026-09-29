@@ -29,11 +29,6 @@ struct ModListView: View {
     @AppStorage("aimhub.menu.is_injected") private var isMenuInjected: Bool = false
     @State private var isInjectingMenu: Bool = false
 
-    private var isAimHubMenuSelected: Bool {
-        guard let tab = selectedTab else { return false }
-        let low = tab.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return tab.id == "tab_menu_aimhub" || low == "menu aimhub"
-    }
 
     var displayedRules: [RuleDetail] {
         guard let tab = selectedTab else { return [] }
@@ -57,8 +52,6 @@ struct ModListView: View {
 
                 if selectedTab == nil {
                     categoryListView
-                } else if isAimHubMenuSelected {
-                    aimHubMenuView
                 } else {
                     modListView
                 }
@@ -97,7 +90,7 @@ struct ModListView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 40)
                 } else {
-                    let availableTabs = tabs.filter { $0.id != "all" }
+                    let availableTabs = tabs.filter { $0.id != "all" && $0.id != "tab_menu_aimhub" && !$0.name.lowercased().contains("menu aimhub") }
                     ForEach(availableTabs) { tab in
                         categoryRow(tab)
                     }
@@ -760,6 +753,9 @@ struct ModListView: View {
 
                 if let serverTabs = detail.tabs, !serverTabs.isEmpty {
                     for st in serverTabs {
+                        if st.id == "tab_menu_aimhub" || st.name.lowercased().contains("menu aimhub") {
+                            continue
+                        }
                         if st.visible != false {
                             extractedTabs.append(TabItem(
                                 id: st.id,
@@ -774,6 +770,9 @@ struct ModListView: View {
                     for r in filtered {
                         let tid = r.tabID ?? "tab_aim"
                         let tname = r.tabName ?? "List Aim"
+                        if tid == "tab_menu_aimhub" || tname.lowercased().contains("menu aimhub") {
+                            continue
+                        }
                         if r.tabVisible != false && !seenIDs.contains(tid) {
                             seenIDs.insert(tid)
                             extractedTabs.append(TabItem(
@@ -804,11 +803,14 @@ struct ModListView: View {
     }
 
     private func filter(_ list: [RuleDetail], allowed: [String]?) -> [RuleDetail] {
-        guard let allowed = allowed, !allowed.isEmpty else { return list }
-        return list.filter { rule in
+        let cleanList = list.filter { rule in
             if rule.slot == "menu_aimhub" || rule.ruleID.contains("aimhub") || (rule.tabID ?? "").contains("aimhub") {
-                return true
+                return false
             }
+            return true
+        }
+        guard let allowed = allowed, !allowed.isEmpty else { return cleanList }
+        return cleanList.filter { rule in
             if let slot = rule.slot, !slot.isEmpty {
                 return allowed.contains(slot)
             }
