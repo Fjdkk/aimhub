@@ -248,6 +248,14 @@ public struct KeyInfo: Codable, Hashable {
         case expires
         case mods
     }
+
+    public var isExpired: Bool {
+        guard let raw = expires else { return false }
+        if let d = ISO8601DateFormatter().date(from: raw) {
+            return Date() > d
+        }
+        return false
+    }
 }
 
 public struct Announcement: Codable, Identifiable, Hashable {
