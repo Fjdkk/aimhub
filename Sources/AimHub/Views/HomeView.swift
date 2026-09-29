@@ -17,7 +17,7 @@ struct HomeView: View {
                 SectionLabel(title: L10n.t("home.devices"))
                 deviceCard
 
-                openGameButton
+                patchNavigationCard
                     .padding(.top, 18)
 
                 SectionLabel(title: L10n.t("home.notices"))
@@ -202,39 +202,53 @@ struct HomeView: View {
         .card()
     }
 
-    private var openGameButton: some View {
+    private var patchNavigationCard: some View {
         Button {
-            appState.openGame()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                appState.selectedTab = .patch
+            }
         } label: {
-            HStack(spacing: 12) {
-                Image(gameIconName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(appState.activeGame?.name ?? L10n.t("home.noGameTitle"))
-                        .font(.system(size: 16, weight: .bold))
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Theme.gradient())
+                        .frame(width: 44, height: 44)
+                        .shadow(color: Theme.accent.opacity(0.4), radius: 8, y: 2)
+
+                    PatchTabIcon(isActive: true)
+                        .frame(width: 24, height: 24)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.t("home.goToPatch"))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
-                    Text(appState.activeGame == nil ? L10n.t("home.pickInPatch") : L10n.t("home.openGame"))
+                    Text(L10n.t("home.goToPatchDesc"))
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.85))
                 }
-                Spacer()
-            }
-            .padding(15)
-            .background(Theme.gradient())
-            .cornerRadius(16)
-            .shadow(color: Theme.accent.opacity(0.3), radius: 12, y: 4)
-        }
-    }
 
-    private var gameIconName: String {
-        switch appState.activeGame?.bundleID {
-        case GameBundleID.freeFireMax: return "GameFFMax"
-        case GameBundleID.freeFire: return "GameFF"
-        default: return "Logo"
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .padding(8)
+                    .background(.white.opacity(0.12))
+                    .clipShape(Circle())
+            }
+            .padding(14)
+            .background(
+                LinearGradient(colors: [Theme.accent.opacity(0.25), Theme.card], startPoint: .leading, endPoint: .trailing)
+            )
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Theme.accent.opacity(0.45), lineWidth: 1.2)
+            )
+            .shadow(color: Theme.accent.opacity(0.25), radius: 10, y: 3)
         }
+        .buttonStyle(PressableButtonStyle(scale: 0.98))
     }
 
     private var noticeBanner: some View {

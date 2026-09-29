@@ -109,34 +109,6 @@ struct PatchView: View {
 
                 Spacer()
 
-                Button {
-                    appState.selectGame(game)
-                    appState.openGame()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(gameLogoName(game.bundleID))
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 15, height: 15)
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 9, weight: .bold))
-
-                        Text("Vào Game")
-                            .font(.system(size: 11, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(
-                        LinearGradient(colors: [Theme.green, Theme.accent], startPoint: .leading, endPoint: .trailing)
-                    )
-                    .cornerRadius(8)
-                    .shadow(color: Theme.green.opacity(0.35), radius: 4, y: 1)
-                }
-                .buttonStyle(.plain)
-
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(Theme.muted)

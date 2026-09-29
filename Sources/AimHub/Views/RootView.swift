@@ -2,11 +2,6 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject var appState: AppState
-    @State private var selectedTab: Tab = .home
-
-    enum Tab: Int {
-        case home, patch, settings
-    }
 
     var body: some View {
         ZStack {
@@ -15,6 +10,12 @@ struct RootView: View {
             if appState.forceUpdate {
                 UpdateBlockedView()
                     .transition(.opacity)
+            } else if !appState.hasSelectedLanguage {
+                LanguageSelectionView()
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.98)),
+                        removal: .opacity.combined(with: .scale(scale: 1.02))
+                    ))
             } else if appState.activeKey == nil {
                 KeyView()
                     .transition(.asymmetric(
@@ -29,6 +30,7 @@ struct RootView: View {
                     ))
             }
         }
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: appState.hasSelectedLanguage)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: appState.activeKey)
         .onAppear {
             appState.start()
@@ -44,7 +46,7 @@ struct RootView: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             Group {
-                switch selectedTab {
+                switch appState.selectedTab {
                 case .home: HomeView()
                 case .patch: PatchView()
                 case .settings: SettingsView()
@@ -70,13 +72,13 @@ struct RootView: View {
         }
     }
 
-    private func tabButton(_ tab: Tab, icon: String, label: String) -> some View {
+    private func tabButton(_ tab: AppState.AppTab, icon: String, label: String) -> some View {
         Button {
-            selectedTab = tab
+            appState.selectedTab = tab
         } label: {
             VStack(spacing: 3) {
                 if tab == .patch {
-                    PatchTabIcon(isActive: selectedTab == tab)
+                    PatchTabIcon(isActive: appState.selectedTab == tab)
                         .frame(width: 20, height: 20)
                 } else {
                     Image(systemName: icon)
@@ -88,9 +90,9 @@ struct RootView: View {
                     .fill(Theme.gradient())
                     .frame(width: 18, height: 3)
                     .cornerRadius(2)
-                    .opacity(selectedTab == tab ? 1 : 0)
+                    .opacity(appState.selectedTab == tab ? 1 : 0)
             }
-            .foregroundColor(selectedTab == tab ? Theme.accent : Theme.muted)
+            .foregroundColor(appState.selectedTab == tab ? Theme.accent : Theme.muted)
             .frame(maxWidth: .infinity)
         }
     }

@@ -30,6 +30,9 @@ struct SettingsView: View {
                 SectionLabel(title: L10n.t("settings.section"))
 
                 settingsRow("key", title: L10n.t("settings.myKey"), action: { route = .keyDetail })
+                settingsRow("arrow.left.square", title: "Đổi Key / Nhập Key Khác", action: {
+                    appState.clearKey()
+                })
 
                 Toggle(isOn: $appState.notificationsEnabled) {
                     HStack(spacing: 12) {

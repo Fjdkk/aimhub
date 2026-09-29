@@ -40,6 +40,11 @@ final class AppState: ObservableObject {
         activeMods.values.first(where: { $0.destination == destination })
     }
 
+    public enum AppTab: Int {
+        case home, patch, settings
+    }
+    @Published var selectedTab: AppTab = .home
+
     @Published var forceUpdate: Bool = false
     @Published var isConnected = false
     @Published var announcements: [Announcement] = []
@@ -52,6 +57,11 @@ final class AppState: ObservableObject {
         didSet {
             L10n.current = language
             UserDefaults.standard.set(language.rawValue, forKey: languageKey)
+        }
+    }
+    @Published var hasSelectedLanguage: Bool {
+        didSet {
+            UserDefaults.standard.set(hasSelectedLanguage, forKey: hasSelectedLanguageKey)
         }
     }
     @Published var games: [Game] = []
@@ -77,6 +87,7 @@ final class AppState: ObservableObject {
     private let lastActiveKey = "aimhub.session.lastActiveAt"
     private let notificationsKey = "aimhub.notificationsEnabled"
     private let languageKey = "aimhub.language"
+    private let hasSelectedLanguageKey = "aimhub.hasSelectedLanguage"
     private var heartbeatTask: Task<Void, Never>?
     private var announcementPollTask: Task<Void, Never>?
     private var displayLink: CADisplayLink?
@@ -86,6 +97,7 @@ final class AppState: ObservableObject {
 
     init() {
         notificationsEnabled = UserDefaults.standard.bool(forKey: notificationsKey)
+        hasSelectedLanguage = UserDefaults.standard.bool(forKey: hasSelectedLanguageKey)
         if let raw = UserDefaults.standard.string(forKey: languageKey),
            let lang = Language(rawValue: raw) {
             language = lang
@@ -94,6 +106,13 @@ final class AppState: ObservableObject {
         }
         L10n.current = language
         startFPSMonitor()
+    }
+
+    func setInitialLanguage(_ lang: Language) {
+        language = lang
+        hasSelectedLanguage = true
+        // Xoá key cũ để user chắc chắn vào màn hình nhập key
+        clearKey()
     }
 
     // MARK: - FPS monitor (CADisplayLink, ~1 lần/giây)

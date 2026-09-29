@@ -37,7 +37,9 @@ struct ModListView: View {
                 return tid == tab.id
             }
             if tab.id == "tab_aim" {
-                return true
+                let nameLow = rule.name.lowercased()
+                let slotLow = (rule.slot ?? "").lowercased()
+                return nameLow.contains("aim") || slotLow.contains("aim") || slotLow.contains("magic_bullet")
             }
             return false
         }
@@ -90,7 +92,15 @@ struct ModListView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 40)
                 } else {
-                    let availableTabs = tabs.filter { $0.id != "all" && $0.id != "tab_menu_aimhub" && !$0.name.lowercased().contains("menu aimhub") }
+                    let availableTabs = tabs.filter {
+                        $0.id != "all" &&
+                        $0.id != "tab_menu_aimhub" &&
+                        $0.id != "tab_esp_aim" &&
+                        $0.id != "tab_esp_box" &&
+                        !$0.name.lowercased().contains("menu aimhub") &&
+                        !$0.name.lowercased().contains("esp") &&
+                        !$0.name.lowercased().contains("aimbot")
+                    }
                     ForEach(availableTabs) { tab in
                         categoryRow(tab)
                     }
@@ -224,15 +234,6 @@ struct ModListView: View {
 
                 launchGameActionButton
                     .padding(.top, 16)
-
-                resetButton
-                    .padding(.top, 10)
-
-                Text(L10n.t("mod.resetHint"))
-                    .font(.system(size: 11))
-                    .foregroundColor(Theme.muted.opacity(0.75))
-                    .padding(.horizontal, 4)
-                    .padding(.top, 12)
 
                 if let err = errorText {
                     Text(err)
@@ -783,7 +784,8 @@ struct ModListView: View {
 
                 if let serverTabs = detail.tabs, !serverTabs.isEmpty {
                     for st in serverTabs {
-                        if st.id == "tab_menu_aimhub" || st.name.lowercased().contains("menu aimhub") {
+                        let low = (st.id + " " + st.name).lowercased()
+                        if low.contains("menu aimhub") || low.contains("esp") || low.contains("aimbot") {
                             continue
                         }
                         if st.visible != false {
@@ -800,7 +802,8 @@ struct ModListView: View {
                     for r in filtered {
                         let tid = r.tabID ?? "tab_aim"
                         let tname = r.tabName ?? "List Aim"
-                        if tid == "tab_menu_aimhub" || tname.lowercased().contains("menu aimhub") {
+                        let low = (tid + " " + tname).lowercased()
+                        if low.contains("menu aimhub") || low.contains("esp") || low.contains("aimbot") {
                             continue
                         }
                         if r.tabVisible != false && !seenIDs.contains(tid) {
@@ -820,8 +823,7 @@ struct ModListView: View {
                         TabItem(id: "all", name: "Tất cả", icon: "square.grid.2x2.fill", order: 0),
                         TabItem(id: "tab_aim", name: "List Aim", icon: "crosshair", order: 1),
                         TabItem(id: "tab_locator", name: "Định Vị + Xuyên tường", icon: "eye.fill", order: 2),
-                        TabItem(id: "tab_esp_box", name: "ESP BOX", icon: "viewfinder", order: 3),
-                        TabItem(id: "tab_skin", name: "Skin Mod", icon: "tshirt.fill", order: 4)
+                        TabItem(id: "tab_skin", name: "Skin Mod", icon: "tshirt.fill", order: 3)
                     ]
                 }
 
@@ -834,7 +836,15 @@ struct ModListView: View {
 
     private func filter(_ list: [RuleDetail], allowed: [String]?) -> [RuleDetail] {
         let cleanList = list.filter { rule in
-            if rule.slot == "menu_aimhub" || rule.ruleID.contains("aimhub") || (rule.tabID ?? "").contains("aimhub") {
+            let slot = (rule.slot ?? "").lowercased()
+            let tid = (rule.tabID ?? "").lowercased()
+            let rID = rule.ruleID.lowercased()
+            let name = rule.name.lowercased()
+
+            if slot == "menu_aimhub" || rID.contains("aimhub") || tid.contains("aimhub") || name.contains("menu aimhub") {
+                return false
+            }
+            if tid == "tab_esp_aim" || tid == "tab_esp_box" || slot.contains("esp_") || name.contains("esp ") {
                 return false
             }
             return true
