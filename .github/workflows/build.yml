@@ -49,10 +49,10 @@ jobs:
             cp "$ICON_SRC" iTunesArtwork
             cp "$ICON_SRC" iTunesArtwork@2x
           fi
-          codesign -s - --entitlements Sources/AimHub/AimHub.entitlements --force "$APP" || true
+          rm -rf "$APP/_CodeSignature"
           mkdir -p Payload
           cp -R "$APP" Payload/
-          zip -qry "AimHub_Cheat.ipa" Payload iTunesArtwork iTunesArtwork@2x
+          zip -qry "AimHub_Cheat.ipa" Payload
           cp "AimHub_Cheat.ipa" AimHub.ipa
           ls -la AimHub_Cheat.ipa
 
