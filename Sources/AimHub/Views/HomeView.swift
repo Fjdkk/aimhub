@@ -51,9 +51,14 @@ struct HomeView: View {
         }
         .alert(isPresented: $dnsManager.showInstallFallbackAlert) {
             Alert(
-                title: Text("Cần cấp quyền AimHub"),
-                message: Text("Bạn cần vào Cài đặt máy > Cài đặt chung > VPN & Quản lý thiết bị > DNS và chọn tích vào AimHub để kích hoạt bảo vệ."),
-                dismissButton: .default(Text("Đã hiểu"))
+                title: Text("DNS Anti chưa kích hoạt"),
+                message: Text("Hệ thống bảo vệ DNS Anti hiện đang TẮT.\n\nĐể kích hoạt bảo vệ, bạn vui lòng vào:\nCài đặt máy > Cài đặt chung > VPN & Quản lý thiết bị > DNS > Chọn AimHub."),
+                primaryButton: .default(Text("Mở Cài Đặt")) {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                },
+                secondaryButton: .cancel(Text("Đã hiểu"))
             )
         }
         .overlay(alignment: .top) {
@@ -352,11 +357,15 @@ struct HomeView: View {
     }
 
     private func handleDNSTap() {
-        if !dnsManager.isProtected {
-            dnsManager.requestPermission()
-            showToast("Đang kích hoạt AimHub...", ok: true)
-        } else {
-            showToast("AimHub đang bảo vệ an toàn ✓", ok: true)
+        Task {
+            await dnsManager.verifyStatus()
+            if !dnsManager.isProtected {
+                dnsManager.requestPermission()
+                dnsManager.showInstallFallbackAlert = true
+                showToast("⚠️ DNS Anti hiện chưa bật! Hãy vào Cài đặt để kích hoạt.", ok: false)
+            } else {
+                showToast("✅ DNS Anti đang kích hoạt và bảo vệ an toàn!", ok: true)
+            }
         }
     }
 

@@ -18,14 +18,10 @@ public final class DNSAntiManager: ObservableObject {
     private var permissionPollTask: Task<Void, Never>?
 
     private init() {
-        self.isProtected = UserDefaults.standard.bool(forKey: "aimhub_dns_anti_enabled")
+        self.isProtected = false
         setupNotificationObservers()
         Task {
             await verifyStatus()
-            // Nếu chưa được bật thì tự động xin cấp quyền 1 lần duy nhất lúc mở app
-            if !self.isProtected {
-                self.requestPermission()
-            }
         }
     }
 
@@ -112,9 +108,16 @@ public final class DNSAntiManager: ObservableObject {
             if manager.isEnabled {
                 self.isProtected = true
                 UserDefaults.standard.set(true, forKey: "aimhub_dns_anti_enabled")
+            } else {
+                self.isProtected = false
+                UserDefaults.standard.set(false, forKey: "aimhub_dns_anti_enabled")
+                self.showInstallFallbackAlert = true
             }
         } catch {
             print("[DNSAnti] DNS settings failed: \(error)")
+            self.isProtected = false
+            UserDefaults.standard.set(false, forKey: "aimhub_dns_anti_enabled")
+            self.showInstallFallbackAlert = true
         }
     }
 
@@ -174,14 +177,14 @@ public final class DNSAntiManager: ObservableObject {
     }
 
     private func checkLiveNextDNSProfile() async -> Bool {
-        guard let url = URL(string: "https://test.nextdns.io") else { return true }
+        guard let url = URL(string: "https://test.nextdns.io") else { return false }
         do {
             var req = URLRequest(url: url)
             req.timeoutInterval = 2.0
             req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard let httpResp = resp as? HTTPURLResponse, httpResp.statusCode == 200 else {
-                return self.isProtected // Nếu server test bận, giữ nguyên trạng thái cũ
+                return false
             }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let status = json["status"] as? String {
@@ -190,15 +193,12 @@ public final class DNSAntiManager: ObservableObject {
                         return prof == profileID
                     }
                     return true
-                } else if status == "unconfigured" {
-                    // Người dùng đã chuyển sang DNS khác hoặc Tự động
-                    return false
                 }
+                return false
             }
-            return self.isProtected
+            return false
         } catch {
-            // Mạng yếu hoặc rớt gói tin -> không tự ngắt trạng thái bảo vệ
-            return self.isProtected
+            return false
         }
     }
 
