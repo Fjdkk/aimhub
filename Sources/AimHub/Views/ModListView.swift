@@ -95,11 +95,7 @@ struct ModListView: View {
                     let availableTabs = tabs.filter {
                         $0.id != "all" &&
                         $0.id != "tab_menu_aimhub" &&
-                        $0.id != "tab_esp_aim" &&
-                        $0.id != "tab_esp_box" &&
-                        !$0.name.lowercased().contains("menu aimhub") &&
-                        !$0.name.lowercased().contains("esp") &&
-                        !$0.name.lowercased().contains("aimbot")
+                        !$0.name.lowercased().contains("menu aimhub")
                     }
                     ForEach(availableTabs) { tab in
                         categoryRow(tab)
