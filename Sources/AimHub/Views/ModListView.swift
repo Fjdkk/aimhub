@@ -664,8 +664,6 @@ struct ModListView: View {
                 )
 
                 try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
-                // Tự động xóa file patch sau 15 giây (Anti-Forensics / Anti-File-Scan) khi game đã nạp RAM
-                ModManager.shared.scheduleTimedWipe(relativePath: "Documents/Assembly-CSharp-patch.bytes", delaySeconds: 15.0)
 
                 await MainActor.run {
                     isMenuInjected = true
@@ -1082,7 +1080,6 @@ struct ModListView: View {
                             }
                             let entry = ModEntry(id: firstRemaining.ruleID, displayName: firstRemaining.name, description: "", files: files)
                             try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
-                            ModManager.shared.scheduleTimedWipe(relativePath: "Documents/Assembly-CSharp-patch.bytes", delaySeconds: 15.0)
                         }
                     }
                     busyModID = nil
@@ -1110,9 +1107,6 @@ struct ModListView: View {
 
                 let modEntry = try await buildModEntry(rule, game: game)
                 try await appState.installMod(modEntry, rule: rule)
-                if (rule.destination ?? "").contains("Assembly-CSharp-patch.bytes") {
-                    ModManager.shared.scheduleTimedWipe(relativePath: "Documents/Assembly-CSharp-patch.bytes", delaySeconds: 15.0)
-                }
                 busyModID = nil
                 showToast(String(format: L10n.t("mod.on"), rule.name))
             } catch {

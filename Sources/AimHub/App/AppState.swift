@@ -106,6 +106,9 @@ final class AppState: ObservableObject {
         }
         L10n.current = language
         startFPSMonitor()
+        if let saved = UserDefaults.standard.string(forKey: "activeBundleID") {
+            loadActiveMods(for: saved)
+        }
     }
 
     func setInitialLanguage(_ lang: Language) {
@@ -193,6 +196,7 @@ final class AppState: ObservableObject {
             log("Kết nối máy chủ thành công", level: .success)
             if let saved = UserDefaults.standard.string(forKey: "activeBundleID") {
                 activeGame = games.first(where: { $0.bundleID == saved })
+                loadActiveMods(for: saved)
             }
             startPingLoop()
         } catch {
@@ -365,7 +369,10 @@ final class AppState: ObservableObject {
     // MARK: - Session (auto logout khi rời app quá lâu)
 
     private func sessionDurationMinutes() -> Int {
-        11
+        if let serverMin = versionInfo?.sessionDuration, serverMin > 0 {
+            return serverMin
+        }
+        return 180 // 3 tiếng để người chơi thoải mái chơi game mà không bị tự out / reset mod
     }
 
     /// Gọi khi app vào lại foreground / khởi động. Đếm thời gian rời app,
@@ -423,13 +430,19 @@ final class AppState: ObservableObject {
     }
 
     private func checkBackgroundGap() {
-        let last = UserDefaults.standard.double(forKey: lastActiveKey)
-        guard last > 0 else {
-            touchLastActive()
+        touchLastActive()
+        if let key = activeKey, key.isExpired {
+            expireSession()
             return
         }
+        let last = UserDefaults.standard.double(forKey: lastActiveKey)
+        guard last > 0 else { return }
         let gone = Date().timeIntervalSince1970 - last
         if gone >= Double(sessionDurationMinutes()) * 60 {
+            if let key = activeKey, !key.isExpired {
+                touchLastActive()
+                return
+            }
             expireSession()
         }
     }
