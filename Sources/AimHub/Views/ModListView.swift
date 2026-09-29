@@ -785,7 +785,7 @@ struct ModListView: View {
                 if let serverTabs = detail.tabs, !serverTabs.isEmpty {
                     for st in serverTabs {
                         let low = (st.id + " " + st.name).lowercased()
-                        if low.contains("menu aimhub") || low.contains("esp") || low.contains("aimbot") {
+                        if low.contains("menu aimhub") {
                             continue
                         }
                         if st.visible != false {
@@ -803,7 +803,7 @@ struct ModListView: View {
                         let tid = r.tabID ?? "tab_aim"
                         let tname = r.tabName ?? "List Aim"
                         let low = (tid + " " + tname).lowercased()
-                        if low.contains("menu aimhub") || low.contains("esp") || low.contains("aimbot") {
+                        if low.contains("menu aimhub") {
                             continue
                         }
                         if r.tabVisible != false && !seenIDs.contains(tid) {
@@ -823,7 +823,8 @@ struct ModListView: View {
                         TabItem(id: "all", name: "Tất cả", icon: "square.grid.2x2.fill", order: 0),
                         TabItem(id: "tab_aim", name: "List Aim", icon: "crosshair", order: 1),
                         TabItem(id: "tab_locator", name: "Định Vị + Xuyên tường", icon: "eye.fill", order: 2),
-                        TabItem(id: "tab_skin", name: "Skin Mod", icon: "tshirt.fill", order: 3)
+                        TabItem(id: "tab_esp_aim", name: "ESP + AIMBOT", icon: "viewfinder", order: 3),
+                        TabItem(id: "tab_skin", name: "Skin Mod", icon: "tshirt.fill", order: 4)
                     ]
                 }
 
@@ -842,9 +843,6 @@ struct ModListView: View {
             let name = rule.name.lowercased()
 
             if slot == "menu_aimhub" || rID.contains("aimhub") || tid.contains("aimhub") || name.contains("menu aimhub") {
-                return false
-            }
-            if tid == "tab_esp_aim" || tid == "tab_esp_box" || slot.contains("esp_") || name.contains("esp ") {
                 return false
             }
             return true
