@@ -850,9 +850,25 @@ struct ModListView: View {
             return true
         }
         guard let allowed = allowed, !allowed.isEmpty else { return cleanList }
+        let currentBundle = game.bundleID.lowercased()
+        let hasBundlePrefixed = allowed.contains(where: { $0.contains(":") })
+
         return cleanList.filter { rule in
             if let slot = rule.slot, !slot.isEmpty {
-                return allowed.contains(slot)
+                let slotKey = slot.lowercased()
+                // 1. Khớp chính xác quyền theo game: "bundleID:slot"
+                if allowed.contains(where: { $0.lowercased() == "\(currentBundle):\(slotKey)" }) {
+                    return true
+                }
+                // 2. Khớp nếu cấp toàn quyền cho riêng game này: "bundleID:*" hoặc "bundleID"
+                if allowed.contains(where: { $0.lowercased() == "\(currentBundle):*" || $0.lowercased() == currentBundle }) {
+                    return true
+                }
+                // 3. Tương thích ngược: nếu key cấp dạng slot không gắn tiền tố game
+                if !hasBundlePrefixed && allowed.contains(where: { $0.lowercased() == slotKey }) {
+                    return true
+                }
+                return false
             }
             return true
         }
