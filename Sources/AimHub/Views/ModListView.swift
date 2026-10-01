@@ -1293,7 +1293,7 @@ struct SkinPreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ZStack {
                 Color(red: 0.07, green: 0.08, blue: 0.12).ignoresSafeArea()
 
