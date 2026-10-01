@@ -372,7 +372,7 @@ final class AppState: ObservableObject {
         if let serverMin = versionInfo?.sessionDuration, serverMin > 0 {
             return serverMin
         }
-        return 180 // 3 tiếng để người chơi thoải mái chơi game mà không bị tự out / reset mod
+        return 60 // 1 tieng tu dong thoat phien
     }
 
     /// Gọi khi app vào lại foreground / khởi động. Đếm thời gian rời app,
@@ -387,6 +387,7 @@ final class AppState: ObservableObject {
     }
 
     func sceneDidEnterBackground() {
+        touchLastActive()
         stopHeartbeat()
         stopAnnouncementPolling()
     }
@@ -430,21 +431,22 @@ final class AppState: ObservableObject {
     }
 
     private func checkBackgroundGap() {
-        touchLastActive()
         if let key = activeKey, key.isExpired {
             expireSession()
             return
         }
         let last = UserDefaults.standard.double(forKey: lastActiveKey)
-        guard last > 0 else { return }
+        guard last > 0 else {
+            touchLastActive()
+            return
+        }
         let gone = Date().timeIntervalSince1970 - last
         if gone >= Double(sessionDurationMinutes()) * 60 {
-            if let key = activeKey, !key.isExpired {
-                touchLastActive()
-                return
-            }
+            log("ÄÃ£ rá»i app \(Int(gone / 60)) phÃºt (vÆ°á»£t quÃ¡ \(sessionDurationMinutes()) phÃºt). Tá»± Ä‘á»™ng káº¿t thÃºc phiÃªn.", level: .warning)
             expireSession()
+            return
         }
+        touchLastActive()
     }
 
     private func expireSession() {
