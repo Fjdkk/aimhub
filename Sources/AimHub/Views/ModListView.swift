@@ -13,6 +13,7 @@ struct ModListView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var allRules: [RuleDetail] = []
+    @State private var previewSkinRule: RuleDetail? = nil
     @State private var tabs: [TabItem] = []
     @State private var selectedTab: TabItem? = nil
     @State private var busyModID: String?
@@ -975,6 +976,22 @@ struct ModListView: View {
 
             Spacer()
 
+            // Nút xem ảnh kế bên chỗ bật tắt các gói skin
+            if rule.fullImageURL != nil || rule.tabID == "tab_skin" || selectedTab?.id == "tab_skin" {
+                Button {
+                    previewSkinRule = rule
+                } label: {
+                    Image(systemName: "photo.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Theme.accent)
+                        .padding(8)
+                        .background(Theme.accent.opacity(0.12))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 4)
+            }
+
             ZStack {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(isOn ? AnyShapeStyle(Theme.gradient()) : AnyShapeStyle(Color(red: 0.165, green: 0.2, blue: 0.271)))
@@ -1267,5 +1284,145 @@ struct ModListView: View {
         appState.selectGame(game)
         appState.openGame()
         showToast("Đang mở \(game.name)...", ok: true)
+    }
+}
+
+// MARK: - Skin Preview Sheet Component
+struct SkinPreviewSheet: View {
+    let rule: RuleDetail
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(red: 0.07, green: 0.08, blue: 0.12).ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Header card with Name and badges
+                        VStack(spacing: 8) {
+                            Text(rule.name.precomposedStringWithCanonicalMapping)
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+
+                            HStack(spacing: 8) {
+                                if let slot = rule.slot {
+                                    Text(slot.uppercased())
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(Theme.accent)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Theme.accent.opacity(0.15))
+                                        .cornerRadius(6)
+                                }
+                                if let group = rule.conflictGroup, !group.isEmpty {
+                                    Text(group.uppercased())
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.orange)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Color.orange.opacity(0.15))
+                                        .cornerRadius(6)
+                                }
+                            }
+                        }
+                        .padding(.top, 10)
+
+                        // Image display
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(red: 0.11, green: 0.13, blue: 0.18))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 320)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Theme.border, lineWidth: 1)
+                                )
+
+                            if let url = rule.fullImageURL {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .empty:
+                                        VStack(spacing: 10) {
+                                            ProgressView()
+                                                .tint(Theme.accent)
+                                            Text("Đang tải ảnh xem trước...")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(Theme.muted)
+                                        }
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(maxHeight: 300)
+                                            .cornerRadius(12)
+                                            .padding(10)
+                                    case .failure:
+                                        VStack(spacing: 8) {
+                                            Image(systemName: "photo.badge.exclamationmark")
+                                                .font(.system(size: 36))
+                                                .foregroundColor(.red.opacity(0.8))
+                                            Text("Không thể tải ảnh xem trước")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(Theme.muted)
+                                            if let img = rule.imageURL {
+                                                Text(img)
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(Theme.muted.opacity(0.6))
+                                                    .lineLimit(2)
+                                                    .padding(.horizontal, 20)
+                                            }
+                                        }
+                                    @unknown default:
+                                        EmptyView()
+                                    }
+                                }
+                            } else {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "photo")
+                                        .font(.system(size: 40))
+                                        .foregroundColor(Theme.muted.opacity(0.5))
+                                    Text("Chưa có ảnh xem trước từ server")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(Theme.muted)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+
+                        // Close button
+                        Button {
+                            dismiss()
+                        } label: {
+                            Text("Đóng")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Theme.gradient())
+                                .cornerRadius(12)
+                                .shadow(color: Theme.accent.opacity(0.4), radius: 8, y: 3)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
+                        .padding(.bottom, 20)
+                    }
+                }
+            }
+            .navigationTitle("Xem Trước Gói Skin")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(Theme.muted)
+                    }
+                }
+            }
+        }
     }
 }

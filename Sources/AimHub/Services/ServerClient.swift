@@ -54,6 +54,7 @@ public struct TabDetail: Codable, Identifiable, Hashable {
     public let name: String
     public let order: Int?
     public let visible: Bool?
+    public let note: String?
 }
 
 public struct MenuSchema: Codable, Hashable {
@@ -214,8 +215,20 @@ public struct RuleDetail: Codable, Identifiable, Hashable {
     public let tabVisible: Bool?
     public let mode: String?
     public let conflictGroup: String?
+    public let tabNote: String?
+    public let imageURL: String?
 
     public var id: String { ruleID }
+
+    public var fullImageURL: URL? {
+        guard let img = imageURL, !img.isEmpty else { return nil }
+        if img.hasPrefix("http://") || img.hasPrefix("https://") {
+            return URL(string: img)
+        }
+        let base = ServerConfig.baseURL.hasSuffix("/") ? String(ServerConfig.baseURL.dropLast()) : ServerConfig.baseURL
+        let path = img.hasPrefix("/") ? img : "/" + img
+        return URL(string: base + path)
+    }
 
     enum CodingKeys: String, CodingKey {
         case ruleID
@@ -233,6 +246,8 @@ public struct RuleDetail: Codable, Identifiable, Hashable {
         case tabVisible = "tab_visible"
         case mode
         case conflictGroup = "conflict_group"
+        case tabNote = "tab_note"
+        case imageURL = "image_url"
     }
 }
 
@@ -240,12 +255,14 @@ public struct KeyInfo: Codable, Hashable {
     public let key: String
     public let deviceID: String?
     public let expires: String?
+    public let activatedAt: String?
     public let mods: [String]?
 
     enum CodingKeys: String, CodingKey {
         case key
         case deviceID = "device_id"
         case expires
+        case activatedAt = "activated_at"
         case mods
     }
 
