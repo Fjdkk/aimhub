@@ -5,6 +5,15 @@ struct TabItem: Identifiable, Hashable {
     let name: String
     let icon: String
     let order: Int
+    let note: String?
+
+    init(id: String, name: String, icon: String, order: Int, note: String? = nil) {
+        self.id = id
+        self.name = name
+        self.icon = icon
+        self.order = order
+        self.note = note
+    }
 }
 
 struct ModListView: View {
@@ -194,12 +203,12 @@ struct ModListView: View {
     private var modListView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if selectedTab?.id == "tab_aim" || (selectedTab?.name.lowercased().contains("aim") ?? false) {
+                if let note = selectedTab?.note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     HStack(spacing: 6) {
                         Image(systemName: "info.circle.fill")
                             .font(.system(size: 12))
                             .foregroundColor(Theme.green)
-                        Text("Vào game trước nhé")
+                        Text(note)
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(Theme.green)
                     }
@@ -788,7 +797,8 @@ struct ModListView: View {
                                 id: st.id,
                                 name: st.name,
                                 icon: iconForTab(name: st.name, id: st.id),
-                                order: st.order ?? 99
+                                order: st.order ?? 99,
+                                note: st.note
                             ))
                         }
                     }
@@ -807,7 +817,8 @@ struct ModListView: View {
                                 id: tid,
                                 name: tname,
                                 icon: iconForTab(name: tname, id: tid),
-                                order: r.tabOrder ?? 99
+                                order: r.tabOrder ?? 99,
+                                note: r.tabNote
                             ))
                         }
                     }
