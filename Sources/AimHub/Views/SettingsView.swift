@@ -35,7 +35,7 @@ struct SettingsView: View {
                 })
 
                 settingsRow("antenna.radiowaves.left.and.right",
-                            title: "Ghép Đôi Thiết Bị (AirLift / LocalDevVPN)",
+                            title: "Ghép Đôi",
                             action: { route = .airlift },
                             trailing: AirLiftPairingStore.shared.isPaired ? "Đã ghép đôi" : "Chưa ghép đôi")
 

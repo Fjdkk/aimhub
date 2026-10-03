@@ -30,7 +30,7 @@ struct ModListView: View {
     @State private var loaded = false
     @State private var toastText: String?
     @State private var toastOK = true
-
+    @State private var showPairingPrompt = false
 
     var displayedRules: [RuleDetail] {
         guard let tab = selectedTab else { return [] }
@@ -70,6 +70,15 @@ struct ModListView: View {
                     .padding(.top, 12)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
+        }
+        .alert("Yêu Cầu Ghép Đôi", isPresented: $showPairingPrompt) {
+            Button("Đến Ghép Đôi") {
+                appState.selectedTab = .settings
+                dismiss()
+            }
+            Button("Hủy", role: .cancel) {}
+        } message: {
+            Text("Không thể truy cập thư mục game do giới hạn sandbox. Bạn có muốn chuyển sang tab Cài Đặt > Ghép Đôi để kích hoạt không?")
         }
     }
 
@@ -631,6 +640,9 @@ struct ModListView: View {
                 } catch {
                     busyModID = nil
                     errorText = error.localizedDescription
+                    if !AirLiftPairingStore.shared.isPaired {
+                        showPairingPrompt = true
+                    }
                 }
             }
             return
@@ -656,6 +668,9 @@ struct ModListView: View {
             } catch {
                 busyModID = nil
                 errorText = error.localizedDescription
+                if !AirLiftPairingStore.shared.isPaired {
+                    showPairingPrompt = true
+                }
             }
         }
     }
@@ -677,6 +692,9 @@ struct ModListView: View {
                 await MainActor.run {
                     busyModID = nil
                     errorText = error.localizedDescription
+                    if !AirLiftPairingStore.shared.isPaired {
+                        showPairingPrompt = true
+                    }
                 }
             }
         }
