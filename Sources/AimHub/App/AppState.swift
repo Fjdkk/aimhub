@@ -146,7 +146,10 @@ final class AppState: ObservableObject {
             checkBackgroundGap()
             startHeartbeat()
         }
-        observeNotificationTap()
+        // Tự động kiểm tra và phục hồi giao dịch dở dang do văng app hoặc tắt nguồn
+        PatchTransactionManager.shared.recoverPendingTransactionsIfNeeded()
+        PatchTransactionManager.shared.cleanStagingAndTempFiles()
+
         Task { await loadAnnouncements() }
         startAnnouncementPolling()
     }

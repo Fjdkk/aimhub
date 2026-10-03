@@ -32,6 +32,10 @@
 		54D2871E0C6A4B2F9D5E7B3A06 /* D91A403F9A951F41B2FE9921 in Sources */ = {isa = PBXBuildFile; fileRef = D91A403F9A951F41B2FE9921 /* AirLiftPairing.swift */; };
 		54D2871E0C6A4B2F9D5E7B3A07 /* D91A403F9A951F41B2FE9922 in Sources */ = {isa = PBXBuildFile; fileRef = D91A403F9A951F41B2FE9922 /* AirLiftTransport.swift */; };
 		54D2871E0C6A4B2F9D5E7B3A08 /* F91A403F9A951F41B2FE9923 in Sources */ = {isa = PBXBuildFile; fileRef = F91A403F9A951F41B2FE9923 /* AirLiftSetupView.swift */; };
+		54D2871E0C6A4B2F9D5E7B3A09 /* D91A403F9A951F41B2FE9924 in Sources */ = {isa = PBXBuildFile; fileRef = D91A403F9A951F41B2FE9924 /* ContainerCacheStore.swift */; };
+		54D2871E0C6A4B2F9D5E7B3A10 /* D91A403F9A951F41B2FE9925 in Sources */ = {isa = PBXBuildFile; fileRef = D91A403F9A951F41B2FE9925 /* HouseArrestClient.swift */; };
+		54D2871E0C6A4B2F9D5E7B3A11 /* D91A403F9A951F41B2FE9926 in Sources */ = {isa = PBXBuildFile; fileRef = D91A403F9A951F41B2FE9926 /* KExploitEngine.swift */; };
+		54D2871E0C6A4B2F9D5E7B3A12 /* D91A403F9A951F41B2FE9927 in Sources */ = {isa = PBXBuildFile; fileRef = D91A403F9A951F41B2FE9927 /* PatchTransactionManager.swift */; };
 		965B9B53D904471DA199DF3C /* AimHub.app in Products */ = {isa = PBXBuildFile; fileRef = 27DD02B19B314642BBCCB9C4 /* AimHub.app */; };
 		740DBBA844ED413ABC362D5B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 70E2E2CC2BE542F29E9B82C8 /* Assets.xcassets */; };
 		FD2D6726F7A04166B7F4E3B5 /* Mods in Resources */ = {isa = PBXBuildFile; fileRef = 995819BB7761420FAD8DD80C /* Mods */; };
@@ -53,6 +57,10 @@
 		D91A403F9A951F41B2FE9919 /* NeutralSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NeutralSeed.swift; sourceTree = "<group>"; };
 		D91A403F9A951F41B2FE9921 /* AirLiftPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/AirLiftPairing.swift; sourceTree = "<group>"; };
 		D91A403F9A951F41B2FE9922 /* AirLiftTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/AirLiftTransport.swift; sourceTree = "<group>"; };
+		D91A403F9A951F41B2FE9924 /* ContainerCacheStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ContainerCacheStore.swift; sourceTree = "<group>"; };
+		D91A403F9A951F41B2FE9925 /* HouseArrestClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/HouseArrestClient.swift; sourceTree = "<group>"; };
+		D91A403F9A951F41B2FE9926 /* KExploitEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/KExploitEngine.swift; sourceTree = "<group>"; };
+		D91A403F9A951F41B2FE9927 /* PatchTransactionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/PatchTransactionManager.swift; sourceTree = "<group>"; };
 		33DC87C8A93142879DA76D36 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/HomeView.swift; sourceTree = "<group>"; };
 		B2367098AEDC453B84EC80F4 /* KeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/KeyView.swift; sourceTree = "<group>"; };
 		11E5FF878EF745F2B6D511AC /* ModListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ModListView.swift; sourceTree = "<group>"; };
@@ -116,6 +124,10 @@
 				D91A403F9A951F41B2FE9919 /* Services/NeutralSeed.swift */,
 				D91A403F9A951F41B2FE9921 /* Services/AirLiftPairing.swift */,
 				D91A403F9A951F41B2FE9922 /* Services/AirLiftTransport.swift */,
+				D91A403F9A951F41B2FE9924 /* Services/ContainerCacheStore.swift */,
+				D91A403F9A951F41B2FE9925 /* Services/HouseArrestClient.swift */,
+				D91A403F9A951F41B2FE9926 /* Services/KExploitEngine.swift */,
+				D91A403F9A951F41B2FE9927 /* Services/PatchTransactionManager.swift */,
 				33DC87C8A93142879DA76D36 /* Views/HomeView.swift */,
 				B2367098AEDC453B84EC80F4 /* Views/KeyView.swift */,
 				11E5FF878EF745F2B6D511AC /* Views/ModListView.swift */,
@@ -223,6 +235,10 @@
 				54D2871E0C6A4B2F9D5E7B3A06 /* D91A403F9A951F41B2FE9921 in Sources */,
 				54D2871E0C6A4B2F9D5E7B3A07 /* D91A403F9A951F41B2FE9922 in Sources */,
 				54D2871E0C6A4B2F9D5E7B3A08 /* F91A403F9A951F41B2FE9923 in Sources */,
+				54D2871E0C6A4B2F9D5E7B3A09 /* D91A403F9A951F41B2FE9924 in Sources */,
+				54D2871E0C6A4B2F9D5E7B3A10 /* D91A403F9A951F41B2FE9925 in Sources */,
+				54D2871E0C6A4B2F9D5E7B3A11 /* D91A403F9A951F41B2FE9926 in Sources */,
+				54D2871E0C6A4B2F9D5E7B3A12 /* D91A403F9A951F41B2FE9927 in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

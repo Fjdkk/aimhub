@@ -37,7 +37,8 @@ struct SettingsView: View {
                 settingsRow("antenna.radiowaves.left.and.right",
                             title: "Ghép Đôi",
                             action: { route = .airlift },
-                            trailing: AirLiftPairingStore.shared.isPaired ? "Đã ghép đôi" : "Chưa ghép đôi")
+                            trailing: AirLiftPairingStore.shared.isPaired ? "Đã ghép đôi" : "Chưa ghép đôi",
+                            isNew: true)
 
                 Toggle(isOn: $appState.notificationsEnabled) {
                     HStack(spacing: 12) {
@@ -123,7 +124,8 @@ struct SettingsView: View {
 
     private func settingsRow(_ icon: String, title: String,
                             action: @escaping () -> Void,
-                            trailing: String? = nil) -> some View {
+                            trailing: String? = nil,
+                            isNew: Bool = false) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -133,6 +135,19 @@ struct SettingsView: View {
                 Text(title)
                     .font(.system(size: 15))
                     .foregroundColor(Theme.text)
+                
+                if isNew {
+                    Text("NEW")
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            LinearGradient(colors: [Color.red, Color.orange], startPoint: .leading, endPoint: .trailing)
+                        )
+                        .cornerRadius(6)
+                }
+                
                 Spacer()
                 if let trailing = trailing {
                     Text(trailing)
@@ -140,7 +155,7 @@ struct SettingsView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 3)
-                        .background(Theme.accent)
+                        .background(trailing == "Đã ghép đôi" ? Color.green : Theme.accent)
                         .cornerRadius(10)
                 }
                 Image(systemName: "chevron.right")

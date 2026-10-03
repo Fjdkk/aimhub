@@ -16,64 +16,90 @@ public struct AirLiftSetupView: View {
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        headerCard
-                        
-                        wifiNoticeCard
+                        systemStatusCard
                         
                         step1PairingCard
                         
-                        step2VPNCard
-                        
-                        step3TunnelTestCard
-                        
-                        infoNoteCard
+                        step2TestConnectionCard
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
                 }
             }
-            .navigationTitle("Ghép Đôi AirLift")
+            .navigationTitle(L10n.t("airlift.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Đóng") {
+                    Button(L10n.t("airlift.close")) {
                         dismiss()
                     }
                     .foregroundColor(Theme.accent)
                 }
             }
             .alert(isPresented: $showAlert) {
-                Alert(title: Text("Thông Báo"), message: Text(alertMessage ?? ""), dismissButton: .default(Text("Đóng")))
+                Alert(
+                    title: Text(L10n.t("airlift.notice")),
+                    message: Text(alertMessage ?? ""),
+                    dismissButton: .default(Text(L10n.t("airlift.close")))
+                )
             }
         }
     }
     
-    private var headerCard: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Theme.accent.opacity(0.15))
-                    .frame(width: 48, height: 48)
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 22))
-                    .foregroundColor(Theme.accent)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text("TRẠNG THÁI AIRLIFT")
+    private var systemStatusCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(L10n.t("airlift.status"))
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(Theme.muted)
-                
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(AirLiftPairingStore.shared.isPaired ? Color.green : Color.orange)
-                        .frame(width: 8, height: 8)
-                    Text(AirLiftPairingStore.shared.isPaired ? "Đã ghép đôi & Sẵn sàng" : "Chưa ghép đôi thiết bị")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Theme.text)
-                }
+                Spacer()
             }
-            Spacer()
+            
+            // 1. Trạng thái ghép đôi
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(AirLiftPairingStore.shared.isPaired ? Color.green : Color.orange)
+                    .frame(width: 8, height: 8)
+                Text("\(L10n.t("airlift.pairingStatus")):")
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.muted)
+                Spacer()
+                Text(AirLiftPairingStore.shared.isPaired ? L10n.t("airlift.paired") : L10n.t("airlift.notPaired"))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(AirLiftPairingStore.shared.isPaired ? .green : .orange)
+            }
+            
+            Divider()
+                .background(Theme.border)
+            
+            // 2. Trạng thái VPN
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(controller.isVPNActive ? Color.green : Color.orange)
+                    .frame(width: 8, height: 8)
+                Text("\(L10n.t("airlift.vpnStatus")):")
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.muted)
+                Spacer()
+                Text(controller.isVPNActive ? L10n.t("airlift.vpnActive") : L10n.t("airlift.vpnInactive"))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(controller.isVPNActive ? .green : .orange)
+            }
+            
+            // 3. Dòng ghi chú nếu chưa bật VPN
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.accent)
+                    .padding(.top, 2)
+                Text(L10n.t("airlift.vpnHint"))
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(10)
+            .background(Theme.bg)
+            .cornerRadius(8)
         }
         .padding(16)
         .background(Theme.card)
@@ -81,26 +107,10 @@ public struct AirLiftSetupView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
     }
     
-    private var wifiNoticeCard: some View {
-        HStack(spacing: 12) {
-            Image(systemName: controller.isWiFiConnected ? "wifi" : "wifi.slash")
-                .font(.system(size: 18))
-                .foregroundColor(controller.isWiFiConnected ? .green : .yellow)
-            
-            Text(controller.isWiFiConnected ? "Đã kết nối mạng Wi-Fi / Mạng nội bộ hợp lệ." : "Vui lòng bật Wi-Fi để dịch vụ AirLift hoạt động ổn định nhất.")
-                .font(.system(size: 13))
-                .foregroundColor(Theme.muted)
-            Spacer()
-        }
-        .padding(12)
-        .background(Theme.card.opacity(0.6))
-        .cornerRadius(12)
-    }
-    
     private var step1PairingCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("BƯỚC 1: GHÉP ĐÔI THIẾT BỊ")
+                Text(L10n.t("airlift.step1"))
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Theme.accent)
                 Spacer()
@@ -110,19 +120,32 @@ public struct AirLiftSetupView: View {
                 }
             }
             
-            Text("Phát tín hiệu ghép đôi để nhận chứng chỉ Pairing Record từ hệ thống iOS.")
+            Text(L10n.t("airlift.step1Desc"))
                 .font(.system(size: 13))
                 .foregroundColor(Theme.muted)
             
+            VStack(alignment: .leading, spacing: 6) {
+                Text(L10n.t("airlift.guide"))
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                Text(L10n.t("airlift.guideContent"))
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.muted)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.bg)
+            .cornerRadius(8)
+            
             if case .pinRequired(let pin) = controller.state {
                 VStack(spacing: 6) {
-                    Text("MÃ XÁC NHẬN GHÉP ĐÔI:")
-                        .font(.system(size: 11, weight: .bold))
+                    Text(L10n.t("airlift.pinTitle"))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundColor(Theme.muted)
                     Text(pin)
-                        .font(.system(size: 26, weight: .heavy, design: .monospaced))
+                        .font(.system(size: 30, weight: .heavy, design: .monospaced))
                         .foregroundColor(Theme.accent)
-                    Text("Nhập mã này nếu hệ thống iPhone yêu cầu xác nhận.")
+                    Text(L10n.t("airlift.pinSub"))
                         .font(.system(size: 11))
                         .foregroundColor(Theme.muted)
                 }
@@ -130,6 +153,10 @@ public struct AirLiftSetupView: View {
                 .padding(12)
                 .background(Theme.bg)
                 .cornerRadius(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
+                )
             }
             
             Button {
@@ -137,7 +164,7 @@ public struct AirLiftSetupView: View {
             } label: {
                 HStack {
                     Image(systemName: "link")
-                    Text(AirLiftPairingStore.shared.isPaired ? "Ghép Đôi Lại" : "Bắt Đầu Ghép Đôi")
+                    Text(AirLiftPairingStore.shared.isPaired ? L10n.t("airlift.rePair") : L10n.t("airlift.startPairing"))
                 }
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white)
@@ -153,53 +180,20 @@ public struct AirLiftSetupView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
     }
     
-    private var step2VPNCard: some View {
+    private var step2TestConnectionCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("BƯỚC 2: MỞ LOCALDEVVPN")
+                Text(L10n.t("airlift.step2"))
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Theme.accent)
                 Spacer()
-            }
-            
-            Text("Cài đặt và bật ứng dụng LocalDevVPN từ App Store để tạo cầu nối mạng nội bộ 127.0.0.1.")
-                .font(.system(size: 13))
-                .foregroundColor(Theme.muted)
-            
-            Button {
-                if let url = URL(string: "https://apps.apple.com/us/app/localdevvpn/id6755608044?l=vi") {
-                    UIApplication.shared.open(url)
+                if controller.isTunnelActive {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
                 }
-            } label: {
-                HStack {
-                    Image(systemName: "arrow.up.forward.app")
-                    Text("Tải LocalDevVPN (App Store)")
-                }
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(Theme.text)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Theme.card)
-                .cornerRadius(10)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
-            }
-        }
-        .padding(16)
-        .background(Theme.card)
-        .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
-    }
-    
-    private var step3TunnelTestCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("BƯỚC 3: KIỂM TRA ĐƯỜNG HẦM")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Theme.accent)
-                Spacer()
             }
             
-            Text("Sau khi đã ghép đôi và bật VPN, hãy kiểm tra kết nối để kích hoạt chế độ AirLift.")
+            Text(L10n.t("airlift.step2Desc"))
                 .font(.system(size: 13))
                 .foregroundColor(Theme.muted)
             
@@ -211,7 +205,7 @@ public struct AirLiftSetupView: View {
             } label: {
                 HStack {
                     Image(systemName: "checkmark.shield")
-                    Text("Kiểm Tra Kết Nối AirLift")
+                    Text(L10n.t("airlift.testTunnel"))
                 }
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white)
@@ -225,17 +219,5 @@ public struct AirLiftSetupView: View {
         .background(Theme.card)
         .cornerRadius(14)
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
-    }
-    
-    private var infoNoteCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("LƯU Ý:")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Theme.muted)
-            Text("• AirLift chỉ chạy hoàn toàn cục bộ trên iPhone (Loopback 127.0.0.1).\n• Không làm chậm mạng, không qua máy chủ trung gian và không tiêu tốn dung lượng 4G/Wi-Fi.")
-                .font(.system(size: 12))
-                .foregroundColor(Theme.muted)
-        }
-        .padding(12)
     }
 }

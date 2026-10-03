@@ -155,6 +155,45 @@ public enum L10n {
         "err.ioFailed": [
             .vietnamese: "Lỗi ghi dữ liệu",
             .english: "File write error"
-        ]
+        ],
+
+        // ===== AirLift Pairing =====
+        "airlift.title": [.vietnamese: "Ghép Đôi AirLift", .english: "AirLift Pairing"],
+        "airlift.status": [.vietnamese: "TRẠNG THÁI HỆ THỐNG", .english: "SYSTEM STATUS"],
+        "airlift.pairingStatus": [.vietnamese: "Trạng thái ghép đôi", .english: "Pairing status"],
+        "airlift.paired": [.vietnamese: "Đã ghép đôi", .english: "Paired"],
+        "airlift.notPaired": [.vietnamese: "Chưa ghép đôi", .english: "Not paired"],
+        "airlift.vpnStatus": [.vietnamese: "Trạng thái VPN", .english: "VPN status"],
+        "airlift.vpnActive": [.vietnamese: "Đang kết nối (Active)", .english: "Connected (Active)"],
+        "airlift.vpnInactive": [.vietnamese: "Chưa bật (Inactive)", .english: "Disconnected (Inactive)"],
+        "airlift.vpnHint": [
+            .vietnamese: "Nếu VPN chưa bật, vui lòng mở ứng dụng LocalDevVPN và gạt bật kết nối (Active).",
+            .english: "If VPN is not active, please open LocalDevVPN and toggle Connect (Active)."
+        ],
+        "airlift.step1": [.vietnamese: "BƯỚC 1: GHÉP ĐÔI THIẾT BỊ", .english: "STEP 1: PAIR DEVICE"],
+        "airlift.step1Desc": [
+            .vietnamese: "Phát tín hiệu quảng bá máy chủ Mac để ghép đôi trong Cài đặt iPhone.",
+            .english: "Broadcast Mac host signal for pairing in iPhone Settings."
+        ],
+        "airlift.guide": [.vietnamese: "HƯỚNG DẪN:", .english: "INSTRUCTIONS:"],
+        "airlift.guideContent": [
+            .vietnamese: "1. Bấm 'Bắt Đầu Ghép Đôi' bên dưới.\n2. Vào Cài đặt iPhone > Quyền riêng tư & Bảo mật > Nhà phát triển > Ghép đôi từ xa.\n3. Chọn thiết bị 'AimHub' và nhập mã PIN hiển thị trên thông báo.",
+            .english: "1. Tap 'Start Pairing' below.\n2. Go to iPhone Settings > Privacy & Security > Developer Mode > Remote Pairing.\n3. Select 'AimHub' and enter the PIN shown in the notification."
+        ],
+        "airlift.pinTitle": [.vietnamese: "Mã ghép đôi của bạn là:", .english: "Your pairing PIN is:"],
+        "airlift.pinSub": [
+            .vietnamese: "Nhập mã này trong mục Nhà phát triển > Ghép đôi từ xa.",
+            .english: "Enter this PIN in Developer Mode > Remote Pairing."
+        ],
+        "airlift.startPairing": [.vietnamese: "Bắt Đầu Ghép Đôi", .english: "Start Pairing"],
+        "airlift.rePair": [.vietnamese: "Ghép Đôi Lại", .english: "Re-Pair"],
+        "airlift.step2": [.vietnamese: "BƯỚC 2: KIỂM TRA KẾT NỐI", .english: "STEP 2: TEST CONNECTION"],
+        "airlift.step2Desc": [
+            .vietnamese: "Kiểm tra xem đường hầm nội bộ đã thông suốt và sẵn sàng can thiệp container chưa.",
+            .english: "Check if the local tunnel is active and ready for container access."
+        ],
+        "airlift.testTunnel": [.vietnamese: "Kiểm Tra Kết Nối", .english: "Test Connection"],
+        "airlift.close": [.vietnamese: "Đóng", .english: "Close"],
+        "airlift.notice": [.vietnamese: "Thông Báo", .english: "Notice"]
     ]
 }

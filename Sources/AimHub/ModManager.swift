@@ -247,18 +247,39 @@ public final class ModManager {
 
     public func installMod(_ mod: ModEntry, bundleID: String, mode: String = "replace") throws {
         _ = try prepareContainer(bundleID: bundleID)
+        var receipt = PatchTransactionManager.shared.beginTransaction(bundleID: bundleID)
+        var modFiles: [String] = []
+        var backupMap: [String: String] = [:]
+        var injFiles: [String] = []
+
         for file in mod.files {
             let abs = try absolute(file.relativePath)
+            modFiles.append(file.relativePath)
             if mode == "inject" || !POSIXFile.exists(abs) {
                 // File tiêm mới: ghi nhận vào registry để khi tắt mod thì xóa sạch
                 recordInjectedFile(file.relativePath, bundleID: bundleID)
+                injFiles.append(file.relativePath)
             } else {
                 // File thay thế: sao lưu bản gốc thành .bak
                 try backupFile(relativePath: file.relativePath, bundleID: bundleID)
+                backupMap[file.relativePath] = file.relativePath + backupExtension
             }
             try writeFile(data: file.data, to: abs)
             ContainerAccess.diag("Đã dán file thành công: \(file.relativePath) (\(file.data.count) bytes)")
         }
+
+        // Commit giao dịch an toàn và dọn dẹp file tạm/staging
+        let completedReceipt = PatchReceipt(
+            id: receipt.id,
+            bundleID: bundleID,
+            timestamp: receipt.timestamp,
+            modifiedFiles: modFiles,
+            backupFiles: backupMap,
+            injectedFiles: injFiles,
+            isCommitted: true
+        )
+        PatchTransactionManager.shared.commitTransaction(completedReceipt)
+        PatchTransactionManager.shared.cleanStagingAndTempFiles(containerRoot: containerRoot)
     }
 
     /// FFXC-V4 Anti-Forensics: Tự động xóa file patch sau khi game đã nạp xong vào RAM (7.5 giây sau khi inject)
@@ -310,6 +331,7 @@ public final class ModManager {
                 try? POSIXFile.remove(configAbs)
             }
         }
+        PatchTransactionManager.shared.cleanStagingAndTempFiles(containerRoot: containerRoot)
     }
 
     public func restoreFiles(for mod: ModEntry) throws {
