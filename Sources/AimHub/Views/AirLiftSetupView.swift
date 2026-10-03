@@ -167,7 +167,7 @@ public struct AirLiftSetupView: View {
                 .foregroundColor(Theme.muted)
             
             Button {
-                if let url = URL(string: "https://apps.apple.com/app/localdevvpn/id6448769337") {
+                if let url = URL(string: "https://apps.apple.com/us/app/localdevvpn/id6755608044?l=vi") {
                     UIApplication.shared.open(url)
                 }
             } label: {
