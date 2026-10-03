@@ -49,6 +49,7 @@ public final class AirLiftPairingController: ObservableObject {
     @Published public var isWiFiConnected: Bool = true
     
     private var pathMonitor: NWPathMonitor?
+    private var localBrowser: NWBrowser?
     private let monitorQueue = DispatchQueue(label: "aimhub.airlift.network_monitor")
     
     private init() {
@@ -68,6 +69,16 @@ public final class AirLiftPairingController: ObservableObject {
     
     public func startPairing() {
         state = .pairing(step: 1, total: 3, message: "Đang phát tín hiệu tìm kiếm daemon hệ thống...")
+        
+        // Kích hoạt tìm kiếm Bonjour cục bộ để iOS hiển thị popup xin quyền mạng cục bộ
+        let params = NWParameters()
+        params.includePeerToPeer = true
+        let browser = NWBrowser(for: .bonjour(type: "_remoted._tcp", domain: nil), using: params)
+        browser.stateUpdateHandler = { newState in
+            ContainerAccess.diag("[AirLift] Local Network Browser state: \(newState)")
+        }
+        browser.start(queue: monitorQueue)
+        self.localBrowser = browser
         
         // Mô phỏng / Gọi quy trình bắt tay RemotePairing TLS-PSK
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.2) { [weak self] in

@@ -62,6 +62,14 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>AimHub sử dụng kết nối mạng cục bộ để ghép đôi thiết bị và truy cập thư mục game thông qua AirLift.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_remoted._tcp</string>
+		<string>_coredevice._tcp</string>
+		<string>_apple-mobdev2._tcp</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
