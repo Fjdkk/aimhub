@@ -69,16 +69,34 @@ public final class ContainerAccess {
             return lsPath
         }
 
-        // Tier 4: Direct Containers Filesystem Scan (TrollStore / Jailed FS / iOS 16)
-        let appsRoot = "/var/mobile/Containers/Data/Application"
-        let fm = FileManager.default
-        if let contents = try? fm.contentsOfDirectory(atPath: appsRoot) {
-            Self.diag("Scanning \(contents.count) app containers in \(appsRoot)...")
-            for sub in contents {
-                let candidatePath = "\(appsRoot)/\(sub)"
-                let metaPath = "\(candidatePath)/.com.apple.mobile_container_manager.metadata.plist"
-                if fm.fileExists(atPath: metaPath) {
-                    if let data = try? Data(contentsOf: URL(fileURLWithPath: metaPath)),
+        // Tier 4: Direct Containers Filesystem Scan (POSIX + FileManager)
+        let appsRoots = [
+            "/private/var/mobile/Containers/Data/Application",
+            "/var/mobile/Containers/Data/Application"
+        ]
+        for appsRoot in appsRoots {
+            var subDirs: [String] = []
+            if let dir = opendir(appsRoot) {
+                while let entry = readdir(dir) {
+                    let name = withUnsafeBytes(of: entry.pointee.d_name) { ptr -> String in
+                        let cStr = ptr.baseAddress!.assumingMemoryBound(to: CChar.self)
+                        return String(cString: cStr)
+                    }
+                    if name != "." && name != ".." {
+                        subDirs.append(name)
+                    }
+                }
+                closedir(dir)
+            }
+            if subDirs.isEmpty {
+                subDirs = (try? FileManager.default.contentsOfDirectory(atPath: appsRoot)) ?? []
+            }
+            if !subDirs.isEmpty {
+                Self.diag("Scanning \(subDirs.count) app containers in \(appsRoot)...")
+                for sub in subDirs {
+                    let candidatePath = "\(appsRoot)/\(sub)"
+                    let metaPath = "\(candidatePath)/.com.apple.mobile_container_manager.metadata.plist"
+                    if let data = try? POSIXFile.read(from: metaPath),
                        let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
                        let ident = plist["MCMMetadataIdentifier"] as? String,
                        ident == bundleID {
