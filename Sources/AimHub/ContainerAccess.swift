@@ -35,6 +35,7 @@ public final class ContainerAccess {
 
         // Tier 1: MCM Basic
         if let mcm = mcm {
+            _ = mcm.escapeSandboxViaSystemGroup()
             do {
                 let path = try mcm.containerPathBasic(forBundleID: bundleID)
                 Self.diag("MCM basic OK: \(path)")

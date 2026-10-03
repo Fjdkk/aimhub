@@ -57,133 +57,6 @@ public struct TabDetail: Codable, Identifiable, Hashable {
     public let note: String?
 }
 
-public struct MenuSchema: Codable, Hashable {
-    public let sections: [MenuSection]
-    public let actionButton: MenuActionButton?
-
-    enum CodingKeys: String, CodingKey {
-        case sections
-        case actionButton = "action_button"
-    }
-
-    public static var defaultSchema: MenuSchema {
-        MenuSchema(
-            sections: [
-                MenuSection(
-                    title: "ESP",
-                    items: [
-                        MenuItem(type: "toggle", key: "esp_box", configKey: "hub_st", bitmask: 1, title: "ESP Box", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_line", configKey: "hub_st", bitmask: 2, title: "ESP Line", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_name", configKey: "hub_st", bitmask: 65536, title: "ESP Name", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_distance", configKey: "hub_st", bitmask: 32768, title: "ESP Distance", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_health", configKey: "hub_st", bitmask: 512, title: "ESP Health Bar", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "esp_skeleton", configKey: "hub_st", bitmask: 131072, title: "ESP Skeleton", min: nil, max: nil, step: nil, options: nil, defaultValue: "false")
-                    ]
-                ),
-                MenuSection(
-                    title: "AIM BOT",
-                    items: [
-                        MenuItem(type: "toggle", key: "aim_fov_circle", configKey: "hub_fov_circle", bitmask: nil, title: "Vòng Tròn FOV (FOV Circle)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "slider", key: "aim_fov", configKey: "hub_fov", bitmask: nil, title: "Bán Kính FOV (Radius)", min: 10, max: 360, step: 5, options: nil, defaultValue: "65"),
-                        MenuItem(type: "toggle", key: "aim_bot", configKey: "hub_aim", bitmask: nil, title: "Aim Bot", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "aim_silent", configKey: "hub_sil", bitmask: nil, title: "Aim Silent", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "no_recoil", configKey: "hub_nm", bitmask: nil, title: "No Recoil", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "segmented", key: "aim_target", configKey: "hub_tab", bitmask: nil, title: "Vị trí ngắm (Target)", min: nil, max: nil, step: nil, options: ["HEAD", "NECK", "BODY"], defaultValue: "HEAD")
-                    ]
-                ),
-                MenuSection(
-                    title: "SPEED",
-                    items: [
-                        MenuItem(type: "toggle", key: "speed_run", configKey: "hub_run_speed", bitmask: nil, title: "Run Speed (Tăng tốc chạy)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "speed_crouch", configKey: "hub_crouch_speed", bitmask: nil, title: "Crouch Speed (Tăng tốc bò/ngồi)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false"),
-                        MenuItem(type: "toggle", key: "speed_sky", configKey: "hub_sky_speed", bitmask: nil, title: "Sky Speed (Nhảy dù siêu tốc)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false")
-                    ]
-                ),
-                MenuSection(
-                    title: "HEAL & UTILITY",
-                    items: [
-                        MenuItem(type: "toggle", key: "heal_fast", configKey: "hub_heal_fast", bitmask: nil, title: "Heal Fast (Cắn máu / Nuốt nấm tức thì)", min: nil, max: nil, step: nil, options: nil, defaultValue: "false")
-                    ]
-                )
-            ],
-            actionButton: MenuActionButton(
-                injectText: "Injector",
-                uninjectText: "Uninjector",
-                injectingText: "Đang Inject...",
-                uninjectingText: "Đang gỡ bỏ...",
-                successInjectToast: "Đã nạp Injector thành công!",
-                successUninjectToast: "Đã gỡ bỏ Injector thành công!"
-            )
-        )   
-    }
-}
-
-public struct MenuSection: Codable, Hashable, Identifiable {
-    public var id: String { title }
-    public let title: String
-    public let items: [MenuItem]
-}
-
-public struct MenuItem: Codable, Hashable, Identifiable {
-    public var id: String { key }
-    public let type: String // "toggle", "slider", "segmented"
-    public let key: String
-    public let configKey: String
-    public let bitmask: Int?
-    public let title: String
-    public let min: Double?
-    public let max: Double?
-    public let step: Double?
-    public let options: [String]?
-    public let defaultValue: String?
-
-    enum CodingKeys: String, CodingKey {
-        case type, key, bitmask, title, min, max, step, options
-        case configKey = "config_key"
-        case defaultValue = "default"
-    }
-
-    public init(type: String, key: String, configKey: String, bitmask: Int? = nil, title: String, min: Double? = nil, max: Double? = nil, step: Double? = nil, options: [String]? = nil, defaultValue: String? = nil) {
-        self.type = type
-        self.key = key
-        self.configKey = configKey
-        self.bitmask = bitmask
-        self.title = title
-        self.min = min
-        self.max = max
-        self.step = step
-        self.options = options
-        self.defaultValue = defaultValue
-    }
-}
-
-public struct MenuActionButton: Codable, Hashable {
-    public let injectText: String?
-    public let uninjectText: String?
-    public let injectingText: String?
-    public let uninjectingText: String?
-    public let successInjectToast: String?
-    public let successUninjectToast: String?
-
-    enum CodingKeys: String, CodingKey {
-        case injectText = "inject_text"
-        case uninjectText = "uninject_text"
-        case injectingText = "injecting_text"
-        case uninjectingText = "uninjecting_text"
-        case successInjectToast = "success_inject_toast"
-        case successUninjectToast = "success_uninject_toast"
-    }
-
-    public init(injectText: String? = nil, uninjectText: String? = nil, injectingText: String? = nil, uninjectingText: String? = nil, successInjectToast: String? = nil, successUninjectToast: String? = nil) {
-        self.injectText = injectText
-        self.uninjectText = uninjectText
-        self.injectingText = injectingText
-        self.uninjectingText = uninjectingText
-        self.successInjectToast = successInjectToast
-        self.successUninjectToast = successUninjectToast
-    }
-}
-
 public struct ProjectDetail: Codable, Identifiable, Hashable {
     public let id: String
     public let name: String
@@ -191,11 +64,9 @@ public struct ProjectDetail: Codable, Identifiable, Hashable {
     public let bundleID: String
     public let tabs: [TabDetail]?
     public let rules: [RuleDetail]
-    public let menuSchema: MenuSchema?
 
     enum CodingKeys: String, CodingKey {
         case id, name, game, bundleID, tabs, rules
-        case menuSchema = "menu_schema"
     }
 }
 
@@ -544,14 +415,7 @@ public final class ServerClient: @unchecked Sendable {
         }
     }
 
-    public func fetchMenuSchema(tabID: String = "tab_menu_aimhub") async -> MenuSchema {
-        do {
-            let schema: MenuSchema = try await get("/api/menu-schema/\(tabID)")
-            return schema
-        } catch {
-            return MenuSchema.defaultSchema
-        }
-    }
+
 
     private func translate(_ detail: String) -> String {
         switch detail {

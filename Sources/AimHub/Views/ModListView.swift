@@ -31,14 +31,6 @@ struct ModListView: View {
     @State private var toastText: String?
     @State private var toastOK = true
 
-    // Menu AimHub State (Server-Driven Dynamic UI)
-    @State private var menuSchema: MenuSchema = MenuSchema.defaultSchema
-    @State private var dynamicBools: [String: Bool] = [:]
-    @State private var dynamicDoubles: [String: Double] = [:]
-    @State private var dynamicStrings: [String: String] = [:]
-    @AppStorage("aimhub.menu.is_injected") private var isMenuInjected: Bool = false
-    @State private var isInjectingMenu: Bool = false
-
 
     var displayedRules: [RuleDetail] {
         guard let tab = selectedTab else { return [] }
@@ -162,8 +154,8 @@ struct ModListView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(Theme.text)
 
-                        if tab.id == "tab_aim" || tab.name.lowercased().contains("aim") {
-                            Text("• Vào game trước nhé")
+                        if let note = tab.note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text("• \(note)")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(Theme.green)
                                 .padding(.horizontal, 6)
@@ -254,471 +246,6 @@ struct ModListView: View {
         }
     }
 
-    private var aimHubMenuView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(menuSchema.sections) { section in
-                    Text(section.title.precomposedStringWithCanonicalMapping)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(Theme.muted)
-                        .padding(.horizontal, 4)
-                        .padding(.top, 16)
-                        .padding(.bottom, 10)
-
-                    VStack(spacing: 8) {
-                        ForEach(section.items) { item in
-                            renderDynamicMenuItem(item)
-                        }
-                    }
-                }
-
-                // Section Action Button: Injector / Uninjector Toggle
-                let actionBtn = menuSchema.actionButton
-                let injectLabel = actionBtn?.injectText ?? "Injector"
-                let uninjectLabel = actionBtn?.uninjectText ?? "Uninjector"
-                let injectingLabel = actionBtn?.injectingText ?? "Đang Inject..."
-                let uninjectingLabel = actionBtn?.uninjectingText ?? "Đang gỡ bỏ..."
-
-                Button {
-                    if isMenuInjected {
-                        uninjectAimHubMenu()
-                    } else {
-                        injectAimHubMenu()
-                    }
-                } label: {
-                    HStack(spacing: 10) {
-                        if isInjectingMenu {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Image(systemName: isMenuInjected ? "eject.fill" : "bolt.fill")
-                                .font(.system(size: 16, weight: .bold))
-                        }
-                        Text(isInjectingMenu
-                             ? (isMenuInjected ? uninjectingLabel : injectingLabel)
-                             : (isMenuInjected ? uninjectLabel : injectLabel))
-                            .font(.system(size: 16, weight: .bold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        isMenuInjected
-                        ? AnyShapeStyle(LinearGradient(colors: [Color.red.opacity(0.85), Color(red: 0.7, green: 0.1, blue: 0.2)], startPoint: .leading, endPoint: .trailing))
-                        : AnyShapeStyle(Theme.gradient())
-                    )
-                    .foregroundColor(.white)
-                    .cornerRadius(14)
-                    .shadow(color: isMenuInjected ? Color.red.opacity(0.4) : Theme.accent.opacity(0.4), radius: 10, y: 4)
-                }
-                .disabled(isInjectingMenu)
-                .padding(.top, 26)
-                .padding(.bottom, 36)
-            }
-            .padding(.horizontal, 16)
-        }
-    }
-
-    @ViewBuilder
-    private func renderDynamicMenuItem(_ item: MenuItem) -> some View {
-        switch item.type {
-        case "toggle":
-            let defVal = (item.defaultValue == "true")
-            menuToggleRow(title: item.title, isOn: bindingForBool(key: item.key, defaultValue: defVal))
-
-        case "slider":
-            let minVal = item.min ?? 0
-            let maxVal = item.max ?? 100
-            let stepVal = item.step ?? 1
-            let defVal = Double(item.defaultValue ?? "") ?? minVal
-            let binding = bindingForDouble(key: item.key, defaultValue: defVal)
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(item.title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(binding.wrappedValue > minVal ? .white : Theme.text)
-                    Spacer()
-                    Text("\(Int(binding.wrappedValue))")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(Theme.accent)
-                }
-                Slider(value: binding, in: minVal...maxVal, step: stepVal)
-                    .tint(Theme.accent)
-            }
-            .card(padding: 16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Theme.border, lineWidth: 1)
-            )
-
-        case "segmented":
-            let options = item.options ?? ["HEAD", "NECK", "BODY"]
-            let defVal = item.defaultValue ?? options.first ?? "HEAD"
-            let binding = bindingForString(key: item.key, defaultValue: defVal)
-            VStack(alignment: .leading, spacing: 8) {
-                Text(item.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Theme.muted)
-                    .padding(.horizontal, 2)
-
-                HStack(spacing: 8) {
-                    ForEach(options, id: \.self) { opt in
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                binding.wrappedValue = opt
-                            }
-                        } label: {
-                            Text(opt)
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(binding.wrappedValue == opt ? .white : Theme.muted)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(
-                                    binding.wrappedValue == opt ? AnyShapeStyle(Theme.gradient()) : AnyShapeStyle(Theme.card2)
-                                )
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(binding.wrappedValue == opt ? Theme.accent.opacity(0.6) : Theme.border, lineWidth: 1)
-                                )
-                                .shadow(color: binding.wrappedValue == opt ? Theme.accent.opacity(0.3) : .clear, radius: 6)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .card(padding: 14)
-
-        default:
-            EmptyView()
-        }
-    }
-
-    private func menuToggleRow(title: String, isOn: Binding<Bool>) -> some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(isOn.wrappedValue ? .white : Theme.text)
-                .shadow(color: isOn.wrappedValue ? Theme.accent.opacity(0.7) : .clear, radius: 8)
-
-            Spacer()
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isOn.wrappedValue ? AnyShapeStyle(Theme.gradient()) : AnyShapeStyle(Color(red: 0.165, green: 0.2, blue: 0.271)))
-                    .frame(width: 50, height: 28)
-                    .shadow(color: isOn.wrappedValue ? Theme.accent.opacity(0.6) : .clear, radius: 8)
-                Circle()
-                    .fill(.white)
-                    .frame(width: 22, height: 22)
-                    .offset(x: isOn.wrappedValue ? 11 : -11)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    isOn.wrappedValue.toggle()
-                }
-            }
-        }
-        .card(padding: 16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(isOn.wrappedValue ? Theme.accent.opacity(0.55) : Theme.border,
-                        lineWidth: isOn.wrappedValue ? 1.5 : 1)
-        )
-    }
-
-    private func initDynamicState(schema: MenuSchema) {
-        for sec in schema.sections {
-            for item in sec.items {
-                let uKey = "aimhub.dynamic." + item.key
-                if item.type == "toggle" {
-                    if UserDefaults.standard.object(forKey: uKey) != nil {
-                        dynamicBools[item.key] = UserDefaults.standard.bool(forKey: uKey)
-                    } else {
-                        dynamicBools[item.key] = (item.defaultValue == "true")
-                    }
-                } else if item.type == "slider" {
-                    if UserDefaults.standard.object(forKey: uKey) != nil {
-                        dynamicDoubles[item.key] = UserDefaults.standard.double(forKey: uKey)
-                    } else {
-                        dynamicDoubles[item.key] = Double(item.defaultValue ?? "") ?? (item.min ?? 0)
-                    }
-                } else if item.type == "segmented" {
-                    if let str = UserDefaults.standard.string(forKey: uKey) {
-                        dynamicStrings[item.key] = str
-                    } else {
-                        dynamicStrings[item.key] = item.defaultValue ?? item.options?.first ?? "HEAD"
-                    }
-                }
-            }
-        }
-    }
-
-    private func bindingForBool(key: String, defaultValue: Bool) -> Binding<Bool> {
-        Binding(
-            get: { dynamicBools[key] ?? defaultValue },
-            set: { newVal in
-                dynamicBools[key] = newVal
-                UserDefaults.standard.set(newVal, forKey: "aimhub.dynamic." + key)
-                syncLiveConfig()
-            }
-        )
-    }
-
-    private func bindingForDouble(key: String, defaultValue: Double) -> Binding<Double> {
-        Binding(
-            get: { dynamicDoubles[key] ?? defaultValue },
-            set: { newVal in
-                dynamicDoubles[key] = newVal
-                UserDefaults.standard.set(newVal, forKey: "aimhub.dynamic." + key)
-                syncLiveConfig()
-            }
-        )
-    }
-
-    private func bindingForString(key: String, defaultValue: String) -> Binding<String> {
-        Binding(
-            get: { dynamicStrings[key] ?? defaultValue },
-            set: { newVal in
-                dynamicStrings[key] = newVal
-                UserDefaults.standard.set(newVal, forKey: "aimhub.dynamic." + key)
-                syncLiveConfig()
-            }
-        )
-    }
-
-    /// Đồng bộ thời gian thực vào localConfig.json và PlayerPrefs để game nhận ngay lập tức khi đang chạy
-    private func syncLiveConfig() {
-        let isBox = (dynamicBools["esp_box"] == true)
-        let isLine = (dynamicBools["esp_line"] == true)
-        let isHealth = (dynamicBools["esp_health"] == true)
-        let isDistance = (dynamicBools["esp_distance"] == true)
-        let isName = (dynamicBools["esp_name"] == true)
-        let isSkeleton = (dynamicBools["esp_skeleton"] == true)
-        let isAimBot = (dynamicBools["aim_bot"] == true)
-        let isAimSilent = (dynamicBools["aim_silent"] == true)
-        let isNoRecoil = (dynamicBools["no_recoil"] == true)
-        let isFovCircle = (dynamicBools["aim_fov_circle"] ?? false)
-        let fovVal = dynamicDoubles["aim_fov"] ?? 65.0
-        let isSpeedRun = (dynamicBools["speed_run"] == true)
-        let isSpeedCrouch = (dynamicBools["speed_crouch"] == true)
-        let isSpeedSky = (dynamicBools["speed_sky"] == true)
-        let isHealFast = (dynamicBools["heal_fast"] == true)
-
-        let targetStr = (dynamicStrings["aim_target"] ?? "HEAD").uppercased()
-        let targetBone: Int32 = (targetStr == "NECK") ? 1 : ((targetStr == "BODY") ? 2 : 0)
-
-        // Tính bitmask ESP chuẩn xác của game
-        var espBitmask: Int32 = 0
-        if isBox { espBitmask |= 1 }
-        if isLine { espBitmask |= 2 }
-        if isHealth { espBitmask |= 512 }
-        if isDistance { espBitmask |= 32768 }
-        if isName { espBitmask |= 65536 }
-        if isSkeleton { espBitmask |= 131072 }
-
-        var config: [String: Any] = [
-            "testCodePatch": true,
-            "resetGuest": true,
-            "esp_box": isBox ? 1 : 0,
-            "esp_line": isLine ? 1 : 0,
-            "esp_health": isHealth ? 1 : 0,
-            "esp_distance": isDistance ? 1 : 0,
-            "esp_name": isName ? 1 : 0,
-            "esp_skeleton": isSkeleton ? 1 : 0,
-            "esp_bitmask": Int(espBitmask),
-            "aim_bot": isAimBot ? 1 : 0,
-            "aim_silent": isAimSilent ? 1 : 0,
-            "aim_target": Int(targetBone),
-            "aim_fov": fovVal,
-            "aim_fov_circle": isFovCircle ? 1 : 0,
-            "no_recoil": isNoRecoil ? 1 : 0,
-            "speed_run": isSpeedRun ? 1 : 0,
-            "speed_crouch": isSpeedCrouch ? 1 : 0,
-            "speed_sky": isSpeedSky ? 1 : 0,
-            "heal_fast": isHealFast ? 1 : 0,
-            // Cờ hub_* cho patch VIP
-            "hub_box": isBox ? 1 : 0,
-            "hub_line": isLine ? 1 : 0,
-            "hub_hp": isHealth ? 1 : 0,
-            "hub_dist": isDistance ? 1 : 0,
-            "hub_name": isName ? 1 : 0,
-            "hub_skel": isSkeleton ? 1 : 0,
-            "hub_st": espBitmask,
-            "hub_aim": isAimBot ? 1 : 0,
-            "hub_sil": isAimSilent ? 1 : 0,
-            "hub_tab": targetBone,
-            "hub_fov": fovVal,
-            "hub_fov_circle": isFovCircle ? 1 : 0,
-            "hub_nm": isNoRecoil ? 1 : 0,
-            "hub_no_recoil": isNoRecoil ? 1 : 0,
-            "hub_run_speed": isSpeedRun ? 1 : 0,
-            "hub_crouch_speed": isSpeedCrouch ? 1 : 0,
-            "hub_sky_speed": isSpeedSky ? 1 : 0,
-            "hub_heal_fast": isHealFast ? 1 : 0,
-            // Cờ dlt_* dự phòng tương thích ngược
-            "dlt_st": espBitmask,
-            "dlt_aim": isAimBot ? 1 : 0,
-            "dlt_sil": isAimSilent ? 1 : 0,
-            "dlt_tab": targetBone,
-            "dlt_nm": isNoRecoil ? 1 : 0
-        ]
-
-        if let data = try? JSONSerialization.data(withJSONObject: config, options: .prettyPrinted) {
-            if let path = try? ModManager.shared.absolute("Documents/localConfig.json") {
-                try? POSIXFile.write(data: data, to: path)
-            }
-            if let path2 = try? ModManager.shared.absolute("Documents/localconfig.json") {
-                try? POSIXFile.write(data: data, to: path2)
-            }
-        }
-
-    }
-
-    private func injectAimHubMenu() {
-        guard !isInjectingMenu else { return }
-        isInjectingMenu = true
-
-        Task {
-            do {
-                // 1. Thu thập dữ liệu theo schema động
-                var config: [String: Any] = [
-                    "testCodePatch": true,
-                    "resetGuest": true
-                ]
-                var bitmaskMap: [String: Int] = [:]
-
-                for section in menuSchema.sections {
-                    for item in section.items {
-                        if item.type == "toggle" {
-                            let defVal = (item.defaultValue == "true")
-                            let isOn = dynamicBools[item.key] ?? defVal
-                            if let bit = item.bitmask {
-                                if isOn {
-                                    bitmaskMap[item.configKey, default: 0] |= bit
-                                }
-                            } else {
-                                config[item.configKey] = isOn ? 1 : 0
-                            }
-                        } else if item.type == "slider" {
-                            let defVal = Double(item.defaultValue ?? "") ?? (item.min ?? 65)
-                            let val = dynamicDoubles[item.key] ?? defVal
-                            config[item.configKey] = Int(val)
-                        } else if item.type == "segmented" {
-                            let defVal = item.defaultValue ?? item.options?.first ?? "HEAD"
-                            let val = dynamicStrings[item.key] ?? defVal
-                            config[item.configKey] = val
-                        }
-                    }
-                }
-                for (k, v) in bitmaskMap {
-                    config[k] = v
-                }
-
-                let configData = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted])
-
-                // Tính toán chính xác các giá trị từ các nút toggle / slider / segmented trong app
-                var espBitmask: Int32 = 0
-                if dynamicBools["esp_box"] == true { espBitmask |= 1 }
-                if dynamicBools["esp_line"] == true { espBitmask |= 2 }
-                if dynamicBools["esp_health"] == true { espBitmask |= 512 }
-                if dynamicBools["esp_distance"] == true { espBitmask |= 32768 }
-                if dynamicBools["esp_name"] == true { espBitmask |= 65536 }
-                if dynamicBools["esp_skeleton"] == true { espBitmask |= 131072 }
-
-                let targetStr = (dynamicStrings["aim_target"] ?? "HEAD").uppercased()
-                let targetBone: Int32
-                switch targetStr {
-                case "NECK": targetBone = 1
-                case "BODY": targetBone = 2
-                default: targetBone = 0
-                }
-
-                let silentAim: Int32 = (dynamicBools["aim_silent"] == true) ? 1 : 0
-                let isAimOn: Bool = (dynamicBools["aim_bot"] == true)
-                let fovSliderVal: Float = Float(dynamicDoubles["aim_fov"] ?? 65.0)
-                let fovCircle: Int32 = (dynamicBools["aim_fov_circle"] ?? false) ? 1 : 0
-
-                let queryItems: [URLQueryItem] = [
-                    URLQueryItem(name: "esp", value: String(espBitmask)),
-                    URLQueryItem(name: "target", value: String(targetBone)),
-                    URLQueryItem(name: "silent", value: String(silentAim)),
-                    URLQueryItem(name: "fov", value: String(fovSliderVal)),
-                    URLQueryItem(name: "aim_on", value: isAimOn ? "true" : "false"),
-                    URLQueryItem(name: "fov_circle", value: String(fovCircle))
-                ]
-
-                // 3. Lấy file patch VIP (Server tự động vá bytecode theo queryItems bảo mật)
-                let vipRuleID = game.bundleID.contains("max") ? "rule_menu_aimhub_vip_max" : "rule_menu_aimhub_vip"
-                let patchBytes = try await ServerClient.shared.downloadRuleFile(ruleID: vipRuleID, queryItems: queryItems)
-                let finalPatchBytes = patchBytes
-
-                // 4. Đóng gói files để inject
-                let files: [ModFile] = [
-                    ModFile(name: "Assembly-CSharp-patch.bytes",
-                            relativePath: "Documents/Assembly-CSharp-patch.bytes",
-                            data: finalPatchBytes),
-                    ModFile(name: "localConfig.json",
-                            relativePath: "Documents/localConfig.json",
-                            data: configData),
-                    ModFile(name: "localconfig.json",
-                            relativePath: "Documents/localconfig.json",
-                            data: configData)
-                ]
-
-                let entry = ModEntry(
-                    id: "aimhub_menu_vip",
-                    displayName: "Menu AimHub",
-                    description: "Full AimHub Features",
-                    files: files
-                )
-
-                try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
-
-                await MainActor.run {
-                    isMenuInjected = true
-                    isInjectingMenu = false
-                    syncLiveConfig()
-                    let toastMsg = menuSchema.actionButton?.successInjectToast ?? "Đã nạp Injector thành công!"
-                    showToast(toastMsg, ok: true)
-                }
-            } catch {
-                await MainActor.run {
-                    isInjectingMenu = false
-                    showToast("Lỗi nạp: \(error.localizedDescription)", ok: false)
-                }
-            }
-        }
-    }
-
-    private func uninjectAimHubMenu() {
-        guard !isInjectingMenu else { return }
-        isInjectingMenu = true
-
-        Task {
-            do {
-                try ModManager.shared.restoreFile(relativePath: "Documents/Assembly-CSharp-patch.bytes", bundleID: game.bundleID, mode: "inject")
-                try? ModManager.shared.restoreFile(relativePath: "Documents/localConfig.json", bundleID: game.bundleID, mode: "inject")
-                try? ModManager.shared.restoreFile(relativePath: "Documents/localconfig.json", bundleID: game.bundleID, mode: "inject")
-                ModManager.shared.neutralizePatch(bundleID: game.bundleID)
-
-                await MainActor.run {
-                    isMenuInjected = false
-                    isInjectingMenu = false
-                    let toastMsg = menuSchema.actionButton?.successUninjectToast ?? "Đã gỡ bỏ Injector thành công!"
-                    showToast(toastMsg, ok: true)
-                }
-            } catch {
-                await MainActor.run {
-                    isInjectingMenu = false
-                    showToast("Lỗi gỡ: \(error.localizedDescription)", ok: false)
-                }
-            }
-        }
-    }
-
-
-
     private func toast(text: String, ok: Bool) -> some View {
         HStack(spacing: 10) {
             Image(systemName: ok ? "checkmark" : "exclamationmark")
@@ -773,14 +300,6 @@ struct ModListView: View {
             if let detail = try? await ServerClient.shared.fetchProject(projectID: project.id) {
                 let filtered = filter(detail.rules, allowed: allowed)
                 allRules = filtered
-
-                // Cập nhật Server-Driven UI Schema cho Menu AimHub
-                if let serverSchema = detail.menuSchema {
-                    menuSchema = serverSchema
-                } else {
-                    menuSchema = await ServerClient.shared.fetchMenuSchema()
-                }
-                initDynamicState(schema: menuSchema)
 
                 // Xây dựng danh sách Tab động
                 var extractedTabs: [TabItem] = []
@@ -1095,16 +614,13 @@ struct ModListView: View {
                             ($0.destination ?? "").contains("Assembly-CSharp-patch.bytes") && appState.isModActive(ruleID: $0.ruleID)
                         }
                         if let firstRemaining = remainingIFix.first {
-                            // Cập nhật lại file patch tổng hợp cho các tính năng IFix còn lại
                             let baseData = try await ServerClient.shared.downloadRuleFile(ruleID: firstRemaining.ruleID, activeSlots: Array(remainingSlots))
-                            let synth = IFixPatchSynthesizer.synthesize(baseData: baseData, activeSlots: remainingSlots)
                             let configJson = "{\"testCodePatch\":true,\"resetGuest\":true}"
                             var files: [ModFile] = [
-                                ModFile(name: firstRemaining.name, relativePath: dest, data: synth)
+                                ModFile(name: firstRemaining.name, relativePath: dest, data: baseData)
                             ]
                             if let configData = configJson.data(using: .utf8) {
                                 files.append(ModFile(name: "localConfig.json", relativePath: "Documents/localConfig.json", data: configData))
-                                files.append(ModFile(name: "localconfig.json", relativePath: "Documents/localconfig.json", data: configData))
                             }
                             let entry = ModEntry(id: firstRemaining.ruleID, displayName: firstRemaining.name, description: "", files: files)
                             try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
@@ -1151,51 +667,9 @@ struct ModListView: View {
             do {
                 try await appState.restoreAll()
                 await MainActor.run {
-                    isMenuInjected = false
-                    
-                    // 1. Tắt sạch toàn bộ các công tắc UI và xóa bộ nhớ cache
-                    for section in menuSchema.sections {
-                        for item in section.items {
-                            if item.type == "toggle" {
-                                dynamicBools[item.key] = false
-                                UserDefaults.standard.removeObject(forKey: "aimhub.dynamic." + item.key)
-                            } else if item.type == "slider" {
-                                let minVal = item.min ?? 65
-                                dynamicDoubles[item.key] = minVal
-                                UserDefaults.standard.removeObject(forKey: "aimhub.dynamic." + item.key)
-                            } else if item.type == "segmented" {
-                                let defVal = item.defaultValue ?? item.options?.first ?? "HEAD"
-                                dynamicStrings[item.key] = defVal
-                                UserDefaults.standard.removeObject(forKey: "aimhub.dynamic." + item.key)
-                            }
-                        }
-                    }
-                    
-                    // 2. Tẩy trắng toàn bộ cờ cheat trong PlayerPrefs (plist) của game
-                    if let game = appState.activeGame,
-                       let prefPath = try? ModManager.shared.absolute("Library/Preferences/\(game.bundleID).plist") {
-                        if var prefs = (try? PropertyListSerialization.propertyList(from: Data(contentsOf: URL(fileURLWithPath: prefPath)), options: [], format: nil) as? [String: Any]) {
-                            let cheatKeys = [
-                                "hub_st", "hub_aim", "hub_tab", "hub_sil", "hub_nm",
-                                "hub_box", "hub_line", "hub_hp", "hub_dist", "hub_name", "hub_skel",
-                                "hub_fov", "hub_fov_circle", "hub_no_recoil",
-                                "hub_run_speed", "hub_crouch_speed", "hub_sky_speed", "hub_heal_fast",
-                                "dlt_st", "dlt_aim", "dlt_tab", "dlt_sil", "dlt_nm", "dlt_box", "dlt_line", "dlt_hp", "dlt_dist", "dlt_name", "dlt_skel"
-                            ]
-                            for k in cheatKeys {
-                                prefs.removeValue(forKey: k)
-                            }
-                            if let plistData = try? PropertyListSerialization.data(fromPropertyList: prefs, format: .binary, options: 0) {
-                                try? POSIXFile.write(data: plistData, to: prefPath)
-                            }
-                        }
-                    }
-                    
-                    // 3. Tẩy trắng file patch bằng Neutral Seed
                     if let game = appState.activeGame {
                         ModManager.shared.neutralizePatch(bundleID: game.bundleID)
                     }
-                    
                     busyModID = nil
                     showToast(L10n.t("mod.allRestored"))
                 }
@@ -1228,16 +702,8 @@ struct ModListView: View {
                 throw error
             }
         }
-        var finalBytes = bytes
-
-        // Nếu là mod patch IFix -> tổng hợp tất cả các tính năng đang bật vào 1 file patch hoàn chỉnh
-        if destination.contains("Assembly-CSharp-patch.bytes") {
-            let activeSlots = currentActiveSlots(incorporating: rule, enabling: true)
-            finalBytes = IFixPatchSynthesizer.synthesize(baseData: bytes, activeSlots: activeSlots)
-        }
-
         var files: [ModFile] = [
-            ModFile(name: rule.name, relativePath: destination, data: finalBytes)
+            ModFile(name: rule.name, relativePath: destination, data: bytes)
         ]
 
         // Tự động nạp kèm localConfig.json
@@ -1245,7 +711,6 @@ struct ModListView: View {
             let configJson = "{\"testCodePatch\":true,\"resetGuest\":true}"
             if let configData = configJson.data(using: .utf8) {
                 files.append(ModFile(name: "localConfig.json", relativePath: "Documents/localConfig.json", data: configData))
-                files.append(ModFile(name: "localconfig.json", relativePath: "Documents/localconfig.json", data: configData))
             }
         }
 

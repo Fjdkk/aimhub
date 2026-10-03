@@ -375,9 +375,6 @@ public final class ModManager {
             if let configAbs = try? absolute("Documents/localConfig.json"), POSIXFile.exists(configAbs) {
                 try? POSIXFile.remove(configAbs)
             }
-            if let configAbs2 = try? absolute("Documents/localconfig.json"), POSIXFile.exists(configAbs2) {
-                try? POSIXFile.remove(configAbs2)
-            }
             print("[WIPE] timed cleanup applied - payload neutralized with 322b seed")
         } catch {
             print("[WIPE] neutralization error: \(error.localizedDescription)")
