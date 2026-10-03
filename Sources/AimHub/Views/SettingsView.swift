@@ -12,7 +12,7 @@ struct SettingsView: View {
     @State private var showAbout = false
 
     enum Route: String, Identifiable {
-        case keyDetail, notices, help, log, lang, about
+        case keyDetail, notices, help, log, lang, about, airlift
         var id: String { rawValue }
     }
 
@@ -33,6 +33,11 @@ struct SettingsView: View {
                 settingsRow("arrow.left.square", title: "Đổi Key / Nhập Key Khác", action: {
                     appState.clearKey()
                 })
+
+                settingsRow("antenna.radiowaves.left.and.right",
+                            title: "Ghép Đôi Thiết Bị (AirLift / LocalDevVPN)",
+                            action: { route = .airlift },
+                            trailing: AirLiftPairingStore.shared.isPaired ? "Đã ghép đôi" : "Chưa ghép đôi")
 
                 Toggle(isOn: $appState.notificationsEnabled) {
                     HStack(spacing: 12) {
@@ -111,6 +116,7 @@ struct SettingsView: View {
             case .log: LogView()
             case .lang: LanguageView()
             case .about: AboutView()
+            case .airlift: AirLiftSetupView()
             }
         }
     }

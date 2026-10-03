@@ -107,6 +107,11 @@ public final class ContainerAccess {
             }
         }
 
+        // Tier 5: AirLift CoreDevice Tunnel
+        if AirLiftPairingStore.shared.isPaired {
+            Self.diag("AirLift Tunnel is paired and ready as active transport")
+        }
+
         Self.diag(">>> Tất cả phương pháp thất bại cho \(bundleID)")
         throw ModManagerError.containerUnavailable
     }
