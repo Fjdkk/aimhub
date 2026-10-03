@@ -1,6 +1,8 @@
 import Foundation
 import Network
 import Combine
+import UIKit
+import UserNotifications
 
 public final class AirLiftPairingStore {
     public static let shared = AirLiftPairingStore()
@@ -50,6 +52,8 @@ public final class AirLiftPairingController: ObservableObject {
     @Published public var isVPNActive: Bool = false
     
     private var pathMonitor: NWPathMonitor?
+    private var netService: NetService?
+    private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private let monitorQueue = DispatchQueue(label: "aimhub.airlift.network_monitor")
     
     private init() {
@@ -78,16 +82,21 @@ public final class AirLiftPairingController: ObservableObject {
     }
     
     public func startPairing() {
-        state = .pairing(step: 1, total: 3, message: "Đang khởi tạo chứng chỉ ghép đôi AirLift...")
+        state = .pairing(step: 1, total: 3, message: "Đang phát quảng bá _remotepairing-pairable-host._tcp...")
         
-        // Tạo socket cục bộ để iOS hiển thị popup xin quyền mạng cục bộ nếu cần
-        let host = NWEndpoint.Host("127.0.0.1")
-        let port = NWEndpoint.Port(integerLiteral: 58783)
-        let connection = NWConnection(host: host, port: port, using: .tcp)
-        connection.stateUpdateHandler = { newState in
-            ContainerAccess.diag("[AirLift] Local probe state: \(newState)")
+        // Bắt đầu giữ background task để không bị hệ thống kill khi chuyển sang Cài đặt
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "AirLiftPairing") { [weak self] in
+            if let task = self?.bgTask, task != .invalid {
+                UIApplication.shared.endBackgroundTask(task)
+                self?.bgTask = .invalid
+            }
         }
-        connection.start(queue: monitorQueue)
+        
+        // Quảng bá Bonjour NetService _remotepairing-pairable-host._tcp giống 3105
+        let service = NetService(domain: "", type: "_remotepairing-pairable-host._tcp.", name: "AimHub", port: 58783)
+        service.publish(options: [])
+        self.netService = service
+        ContainerAccess.diag("[AirLift] NetService _remotepairing-pairable-host._tcp published on port 58783.")
         
         // Tạo mã PIN xác thực và lưu chứng chỉ pairing
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { [weak self] in
@@ -97,6 +106,7 @@ public final class AirLiftPairingController: ObservableObject {
             
             DispatchQueue.main.async {
                 self.state = .pinRequired(pin: generatedPin)
+                self.postPINNotification(pin: generatedPin)
             }
             
             DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.8) { [weak self] in
@@ -109,10 +119,22 @@ public final class AirLiftPairingController: ObservableObject {
                     self.state = .success
                     self.isTunnelActive = self.isVPNActive
                     ContainerAccess.diag("[AirLift] Pairing record generated and saved successfully.")
-                    connection.cancel()
+                    if self.bgTask != .invalid {
+                        UIApplication.shared.endBackgroundTask(self.bgTask)
+                        self.bgTask = .invalid
+                    }
                 }
             }
         }
+    }
+    
+    private func postPINNotification(pin: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Ghép Đôi AirLift"
+        content.body = "Mã xác thực ghép đôi của bạn: \(pin)"
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: "aimhub.airlift.pin", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
     
     public func importPairingData(_ data: Data) -> Bool {
