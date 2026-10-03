@@ -548,7 +548,9 @@ final class AppState: ObservableObject {
         notificationTapToken = NotificationCenter.default.addObserver(
             forName: .aimhubOpenNotices, object: nil, queue: .main
         ) { [weak self] _ in
-            self?.openNoticesRequest = true
+            Task { @MainActor in
+                self?.openNoticesRequest = true
+            }
         }
     }
 
