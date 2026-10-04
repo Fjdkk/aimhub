@@ -168,19 +168,30 @@ public final class MCMContainer {
             throw MCMError.objectFailed("copy")
         }
 
-        guard let tokenPtr = fns.copySandboxToken(copy) else {
-            fns.objectFree(copy)
-            throw MCMError.objectFailed("no sandbox token")
+        var directConsumed = false
+        if let tokenPtr = fns.copySandboxToken(copy) {
+            defer { free(tokenPtr) }
+            if tokenPtr.pointee != 0 {
+                // Direct kernel sandbox extension consume qua libsystem_sandbox
+                let sandboxHandle = dlopen("/usr/lib/system/libsystem_sandbox.dylib", RTLD_LAZY) ?? UnsafeMutableRawPointer(bitPattern: -2)
+                if let sbHandle = sandboxHandle,
+                   let consumeSym = dlsym(sbHandle, "sandbox_extension_consume") {
+                    typealias ConsumeFn = @convention(c) (UnsafePointer<CChar>?) -> Int64
+                    let consume = unsafeBitCast(consumeSym, to: ConsumeFn.self)
+                    let handle = consume(tokenPtr)
+                    if handle >= 0 {
+                        directConsumed = true
+                        Self.consumedSandboxTokens.append(handle)
+                        ContainerAccess.diag("[SBX] ✅ sandbox_extension_consume thành công (handle=\(handle))")
+                    }
+                }
+            }
         }
-        let tokenPresent = tokenPtr.pointee != 0
-        free(tokenPtr)
 
-        guard tokenPresent else {
-            fns.objectFree(copy)
-            throw MCMError.activationFailed(0)
-        }
         let ok = fns.sandboxExtensionActivate(copy, false)
-        guard ok else {
+        if ok {
+            ContainerAccess.diag("[SBX] ✅ MCM sandboxExtensionActivate thành công")
+        } else if !directConsumed {
             fns.objectFree(copy)
             throw MCMError.activationFailed(errno)
         }

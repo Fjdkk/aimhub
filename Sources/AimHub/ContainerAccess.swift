@@ -33,53 +33,41 @@ public final class ContainerAccess {
         let hostID = Bundle.main.bundleIdentifier ?? "nil"
         Self.diag("Host bundleID = \(hostID)")
 
-        // Tier 0: Kiểm tra bộ nhớ đệm (Cache Store) siêu tốc
-        if let cached = ContainerCacheStore.shared.getCachedPath(for: bundleID) {
-            Self.diag("[Tier0] ✅ Cache HIT (0.01s): \(cached)")
-            return cached
-        }
-        Self.diag("[Tier0] Cache MISS → tiếp tục tìm kiếm...")
-
-        // Tier 1: Kernel Sandbox Escape (KExploit cho iOS 14 - 16.1.2)
-        if KExploitEngine.shared.tryEscapeSandbox() {
-            Self.diag("[Tier1] ✅ KExploit kích hoạt thành công")
-        } else {
-            Self.diag("[Tier1] ⚠️ KExploit không khả dụng (iOS version không hỗ trợ hoặc đã vá)")
-        }
-
-        // Tier 2: MCM Basic & Advanced
+        // Tier 1: MCM Container Access (Bắt buộc chạy trực tiếp để kích hoạt Sandbox Extension cho process)
         if let mcm = mcm {
-            let sbxResult = mcm.escapeSandboxViaSystemGroup()
-            Self.diag("[Tier2] Sandbox escape via SystemGroup: \(sbxResult ? "✅ OK" : "❌ FAIL")")
             do {
                 let path = try mcm.containerPathBasic(forBundleID: bundleID)
-                Self.diag("[Tier2] ✅ MCM basic OK: \(path)")
-                ContainerCacheStore.shared.setCachedPath(path, for: bundleID)
+                Self.diag("[Tier1] ✅ MCM basic OK: \(path)")
                 return path
             } catch {
-                Self.diag("[Tier2] MCM basic FAIL: \(error.localizedDescription)")
+                Self.diag("[Tier1] ⚠️ MCM basic FAIL: \(error.localizedDescription)")
             }
 
             do {
                 let path = try mcm.containerPath(forBundleID: bundleID)
-                Self.diag("[Tier2] ✅ MCM advanced OK: \(path)")
-                ContainerCacheStore.shared.setCachedPath(path, for: bundleID)
+                Self.diag("[Tier1] ✅ MCM advanced OK: \(path)")
                 return path
             } catch {
-                Self.diag("[Tier2] MCM advanced FAIL: \(error.localizedDescription)")
+                Self.diag("[Tier1] ⚠️ MCM advanced FAIL: \(error.localizedDescription)")
             }
 
             do {
                 if let path = try mcm.containerPathByIterating(forBundleID: bundleID) {
-                    Self.diag("[Tier2] ✅ MCM iterate OK: \(path)")
-                    ContainerCacheStore.shared.setCachedPath(path, for: bundleID)
+                    Self.diag("[Tier1] ✅ MCM iterate OK: \(path)")
                     return path
                 }
             } catch {
-                Self.diag("[Tier2] MCM iterate FAIL: \(error.localizedDescription)")
+                Self.diag("[Tier1] ⚠️ MCM iterate FAIL: \(error.localizedDescription)")
             }
         } else {
-            Self.diag("[Tier2] MCM không khả dụng (dlopen failed)")
+            Self.diag("[Tier1] ⚠️ MCM không khả dụng (dlopen failed)")
+        }
+
+        // Tier 2: Kernel Sandbox Escape (KExploit cho iOS 14 - 16.1.2)
+        if KExploitEngine.shared.tryEscapeSandbox() {
+            Self.diag("[Tier2] ✅ KExploit kích hoạt thành công")
+        } else {
+            Self.diag("[Tier2] ⚠️ KExploit không khả dụng")
         }
 
         // Tier 3: LaunchServices LSApplicationProxy (via canmaplsdatabase)
@@ -123,7 +111,6 @@ public final class ContainerAccess {
                        let ident = plist["MCMMetadataIdentifier"] as? String,
                        ident == bundleID {
                         Self.diag("Found container by metadata: \(candidatePath)")
-                        ContainerCacheStore.shared.setCachedPath(candidatePath, for: bundleID)
                         return candidatePath
                     }
                 }
@@ -134,7 +121,6 @@ public final class ContainerAccess {
         if let docPath = HouseArrestClient.shared.lookupDocumentsPath(for: bundleID) {
             Self.diag("HouseArrest container OK: \(docPath)")
             let rootPath = (docPath as NSString).deletingLastPathComponent
-            ContainerCacheStore.shared.setCachedPath(rootPath, for: bundleID)
             return rootPath
         }
 
