@@ -201,10 +201,31 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             params.allowLocalEndpointReuse = true
             
             let listener = try NWListener(using: params, on: nwPort)
+            
+            // Đính kèm Bonjour Service trực tiếp vào NWListener (chuẩn Network.framework của iOS)
+            var txtDict: [String: Data] = [:]
+            txtDict["model"] = "Mac17,7".data(using: .utf8)
+            txtDict["ver"] = "1".data(using: .utf8)
+            txtDict["minVer"] = "17".data(using: .utf8)
+            txtDict["flags"] = "1".data(using: .utf8)
+            txtDict["accountID"] = "AimHub".data(using: .utf8)
+            txtDict["remotepairing_udid"] = UUID().uuidString.data(using: .utf8)
+            
+            var altIRK = Data(count: 16)
+            _ = altIRK.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+            txtDict["altIRK"] = altIRK
+            
+            var authTag = Data(count: 16)
+            _ = authTag.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+            txtDict["authTag"] = authTag
+            
+            let txtData = NetService.data(fromTXTRecord: txtDict)
+            listener.service = NWListener.Service(name: "AimHub", type: "_remotepairing-pairable-host._tcp", domain: nil, txtRecord: txtData)
+            
             listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    ContainerAccess.diag("[AirLift] TCP Listener ready on port \(port).")
+                    ContainerAccess.diag("[AirLift] TCP Listener & NW Bonjour ready on port \(port).")
                 case .failed(let error):
                     ContainerAccess.diag("[AirLift] TCP Listener failed: \(error.localizedDescription)")
                 default:
@@ -256,7 +277,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         netService?.stop()
         
         let hostName = "AimHub"
-        let service = NetService(domain: "local.", type: "_remotepairing-pairable-host._tcp.", name: hostName, port: Int32(port))
+        let service = NetService(domain: "", type: "_remotepairing-pairable-host._tcp.", name: hostName, port: Int32(port))
         service.delegate = self
         
         // Chuẩn bị TXT Record Dictionary theo đúng đặc tả của Apple Developer Remote Pairing (3105)
@@ -280,7 +301,8 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         service.setTXTRecord(txtData)
         
         service.schedule(in: .main, forMode: .common)
-        service.publish(options: [.listenForConnections])
+        // Không dùng listenForConnections để tránh tranh chấp port với NWListener
+        service.publish(options: [])
         self.netService = service
         ContainerAccess.diag("[AirLift] Published Bonjour _remotepairing-pairable-host._tcp. [model=Mac17,7, port=\(port)]")
     }
