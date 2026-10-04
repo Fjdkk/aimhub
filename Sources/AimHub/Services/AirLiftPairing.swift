@@ -184,12 +184,6 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         // 5. Phát sóng NetService _remotepairing-pairable-host._tcp với đầy đủ TXT records model Mac17,7 chuẩn Apple
         startAdvertisingBonjour(port: pairingPort)
         
-        // 6. Lưu bản ghi Pairing Record hợp lệ
-        let pairingDataString = "AIRLIFT_PAIRING_MAC17_7_\(UUID().uuidString)_\(generatedPin)"
-        if let recordData = pairingDataString.data(using: .utf8) {
-            AirLiftPairingStore.shared.savePairingRecord(recordData)
-        }
-        
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             guard let self = self else { return }
             if case .pinRequired = self.state {
@@ -235,6 +229,12 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         // Tiếp nhận kết nối và hoàn tất xác nhận ghép đôi
         connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] content, context, isComplete, error in
             guard let self = self else { return }
+            
+            // Lưu bản ghi Pairing Record khi handshake thành công
+            let pairingDataString = "AIRLIFT_PAIRING_MAC17_7_\(UUID().uuidString)_\(self.currentPin)"
+            if let recordData = pairingDataString.data(using: .utf8) {
+                AirLiftPairingStore.shared.savePairingRecord(recordData)
+            }
             
             DispatchQueue.main.async {
                 self.state = .success
