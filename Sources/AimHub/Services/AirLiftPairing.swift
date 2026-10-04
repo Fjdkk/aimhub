@@ -316,11 +316,22 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         ContainerAccess.diag("[AirLift] NetService did not publish: \(errorDict)")
     }
     
+    public func triggerLocalNetworkPrompt() {
+        // Gửi 1 kết nối nhẹ để iOS kích hoạt popup xin quyền Mạng cục bộ (Local Network)
+        let browser = NWBrowser(for: .bonjour(type: "_remotepairing-pairable-host._tcp", domain: nil), using: .tcp)
+        browser.stateUpdateHandler = { _ in }
+        browser.start(queue: DispatchQueue.global(qos: .background))
+        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 1.5) {
+            browser.cancel()
+        }
+    }
+    
     public func postPINNotification(pin: String) {
         let content = UNMutableNotificationContent()
-        content.title = "AimHub Cheat"
-        content.body = "Mã ghép đôi của bạn là: \(pin)"
+        content.title = "Mã Ghép Đôi AirLift"
+        content.body = "Mã xác thực: \(pin) — Nhập mã này vào Cài đặt > Nhà phát triển > Ghép đôi."
         content.sound = .default
+        
         let request = UNNotificationRequest(identifier: "aimhub.airlift.pin", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }

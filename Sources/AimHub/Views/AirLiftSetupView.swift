@@ -85,7 +85,32 @@ public struct AirLiftSetupView: View {
     
     private var actionButtonsCard: some View {
         VStack(spacing: 12) {
+            // Hiển thị mã PIN nếu đang trong quá trình ghép đôi
+            if !controller.currentPin.isEmpty && !AirLiftPairingStore.shared.isPaired {
+                VStack(spacing: 6) {
+                    Text("MÃ GHÉP ĐÔI NHÀ PHÁT TRIỂN")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Theme.muted)
+                    
+                    Text(controller.currentPin)
+                        .font(.system(size: 28, weight: .heavy, design: .monospaced))
+                        .foregroundColor(Theme.accent)
+                        .tracking(6)
+                        .padding(.vertical, 4)
+                    
+                    Text("Nhập mã này vào Cài đặt > Nhà phát triển > Ghép đôi")
+                        .font(.system(size: 12))
+                        .foregroundColor(Theme.muted.opacity(0.8))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.white.opacity(0.04))
+                .cornerRadius(10)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.accent.opacity(0.3), lineWidth: 1))
+            }
+            
             Button {
+                controller.triggerLocalNetworkPrompt()
                 controller.startPairing()
             } label: {
                 HStack(spacing: 8) {
