@@ -120,7 +120,7 @@ public struct AirLiftSetupView: View {
             
             if AirLiftPairingStore.shared.isPaired {
                 Button {
-                    controller.unpair()
+                    controller.resetPairing()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "link.badge.plus")

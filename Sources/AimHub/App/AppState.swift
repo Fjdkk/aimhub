@@ -369,7 +369,13 @@ final class AppState: ObservableObject {
         do {
             let path = try ContainerAccess.shared.gameContainerPath(bundleID: game.bundleID)
             var isDir: ObjCBool = false
-            return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.b    // MARK: - Session (tự động kết thúc phiên và thoát app đúng 60 phút)
+            return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: - Session (tự động kết thúc phiên và thoát app đúng 60 phút)
 
     private func sessionDurationMinutes() -> Int {
         if let serverMin = versionInfo?.sessionDuration, serverMin > 0 {
