@@ -15,12 +15,10 @@ public struct AirLiftSetupView: View {
                 Theme.bg.ignoresSafeArea()
                 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(spacing: 16) {
                         systemStatusCard
                         
-                        step1PairingCard
-                        
-                        step2TestConnectionCard
+                        actionButtonsCard
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
@@ -47,14 +45,7 @@ public struct AirLiftSetupView: View {
     }
     
     private var systemStatusCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(L10n.t("airlift.status"))
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Theme.muted)
-                Spacer()
-            }
-            
+        VStack(spacing: 12) {
             // 1. Trạng thái ghép đôi
             HStack(spacing: 8) {
                 Circle()
@@ -85,21 +76,6 @@ public struct AirLiftSetupView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(controller.isVPNActive ? .green : .orange)
             }
-            
-            // 3. Dòng ghi chú nếu chưa bật VPN
-            HStack(alignment: .top, spacing: 6) {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 12))
-                    .foregroundColor(Theme.accent)
-                    .padding(.top, 2)
-                Text(L10n.t("airlift.vpnHint"))
-                    .font(.system(size: 12))
-                    .foregroundColor(Theme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(10)
-            .background(Theme.bg)
-            .cornerRadius(8)
         }
         .padding(16)
         .background(Theme.card)
@@ -107,95 +83,22 @@ public struct AirLiftSetupView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
     }
     
-    private var step1PairingCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(L10n.t("airlift.step1"))
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Theme.accent)
-                Spacer()
-                if AirLiftPairingStore.shared.isPaired {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                }
-            }
-            
-            Text(L10n.t("airlift.step1Desc"))
-                .font(.system(size: 13))
-                .foregroundColor(Theme.muted)
-            
-            VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.t("airlift.guide"))
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Theme.accent)
-                Text(L10n.t("airlift.guideContent"))
-                    .font(.system(size: 12))
-                    .foregroundColor(Theme.muted)
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.bg)
-            .cornerRadius(8)
-            
-            if case .pinRequired(let pin) = controller.state {
-                VStack(spacing: 6) {
-                    Text(L10n.t("airlift.pinTitle"))
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(Theme.muted)
-                    Text(pin)
-                        .font(.system(size: 30, weight: .heavy, design: .monospaced))
-                        .foregroundColor(Theme.accent)
-                    Text(L10n.t("airlift.pinSub"))
-                        .font(.system(size: 11))
-                        .foregroundColor(Theme.muted)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(12)
-                .background(Theme.bg)
-                .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Theme.accent.opacity(0.3), lineWidth: 1)
-                )
-            }
-            
+    private var actionButtonsCard: some View {
+        VStack(spacing: 12) {
             Button {
                 controller.startPairing()
             } label: {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: "link")
                     Text(AirLiftPairingStore.shared.isPaired ? L10n.t("airlift.rePair") : L10n.t("airlift.startPairing"))
                 }
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, 14)
                 .background(Theme.gradient())
                 .cornerRadius(10)
             }
-        }
-        .padding(16)
-        .background(Theme.card)
-        .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
-    }
-    
-    private var step2TestConnectionCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(L10n.t("airlift.step2"))
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Theme.accent)
-                Spacer()
-                if controller.isTunnelActive {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                }
-            }
-            
-            Text(L10n.t("airlift.step2Desc"))
-                .font(.system(size: 13))
-                .foregroundColor(Theme.muted)
             
             Button {
                 controller.testTunnelConnection { ok, msg in
@@ -203,16 +106,31 @@ public struct AirLiftSetupView: View {
                     showAlert = true
                 }
             } label: {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: "checkmark.shield")
                     Text(L10n.t("airlift.testTunnel"))
                 }
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, 14)
                 .background(Color.green)
                 .cornerRadius(10)
+            }
+            
+            if AirLiftPairingStore.shared.isPaired {
+                Button {
+                    controller.unpair()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "link.badge.plus")
+                        Text(L10n.t("airlift.unpair"))
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.red.opacity(0.85))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                }
             }
         }
         .padding(16)
