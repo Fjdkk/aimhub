@@ -482,10 +482,7 @@ final class AppState: ObservableObject {
     }
 
     private func expireSession(autoExit: Bool = false) {
-        log("Phiên hoạt động đã kết thúc hoặc key đã hết hạn")
-        Task {
-            await DNSAntiManager.shared.stopProtection()
-        }
+        log("Phiên hoạt động đã kết thúc hoặc key đã hết hạn (DNS Anti vẫn duy trì bảo vệ)")
         let bundleID = activeGame?.bundleID
             ?? UserDefaults.standard.string(forKey: "activeBundleID")
         if let bundleID = bundleID {
