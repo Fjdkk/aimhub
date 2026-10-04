@@ -6,6 +6,7 @@ public struct AirLiftSetupView: View {
     @StateObject private var controller = AirLiftPairingController.shared
     @State private var alertMessage: String?
     @State private var showAlert: Bool = false
+    @State private var isPinCopied: Bool = false
     
     public init() {}
     
@@ -18,7 +19,13 @@ public struct AirLiftSetupView: View {
                     VStack(spacing: 16) {
                         systemStatusCard
                         
+                        if !controller.currentPin.isEmpty {
+                            pinDisplayCard
+                        }
+                        
                         actionButtonsCard
+                        
+                        guideCard
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
@@ -86,32 +93,52 @@ public struct AirLiftSetupView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
     }
     
-    private var actionButtonsCard: some View {
-        VStack(spacing: 12) {
-            // Hiển thị mã PIN nếu đang trong quá trình ghép đôi
-            if !controller.currentPin.isEmpty && !AirLiftPairingStore.shared.isPaired {
-                VStack(spacing: 6) {
-                    Text("MÃ GHÉP ĐÔI NHÀ PHÁT TRIỂN")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Theme.muted)
-                    
-                    Text(controller.currentPin)
-                        .font(.system(size: 28, weight: .heavy, design: .monospaced))
-                        .foregroundColor(Theme.accent)
-                        .tracking(6)
-                        .padding(.vertical, 4)
-                    
-                    Text("Nhập mã này vào Cài đặt > Nhà phát triển > Ghép đôi")
-                        .font(.system(size: 12))
-                        .foregroundColor(Theme.muted.opacity(0.8))
+    private var pinDisplayCard: some View {
+        VStack(spacing: 8) {
+            Text("MÃ GHÉP ĐÔI NHÀ PHÁT TRIỂN")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Theme.muted)
+            
+            Text(controller.currentPin)
+                .font(.system(size: 32, weight: .heavy, design: .monospaced))
+                .foregroundColor(Theme.accent)
+                .tracking(6)
+                .padding(.vertical, 4)
+            
+            Button {
+                UIPasteboard.general.string = controller.currentPin
+                isPinCopied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    isPinCopied = false
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.white.opacity(0.04))
-                .cornerRadius(10)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.accent.opacity(0.3), lineWidth: 1))
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isPinCopied ? "checkmark.circle.fill" : "doc.on.doc")
+                    Text(isPinCopied ? "Đã Sao Chép Mã PIN!" : "Sao Chép Mã PIN")
+                }
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(isPinCopied ? .green : Theme.accent)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.06))
+                .cornerRadius(8)
             }
             
+            Text("Mã PIN này được lưu cố định cho phiên làm việc. Hãy mở Cài đặt để nhập mã.")
+                .font(.system(size: 11))
+                .foregroundColor(Theme.muted.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(16)
+        .background(Theme.card)
+        .cornerRadius(14)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.accent.opacity(0.4), lineWidth: 1.5))
+    }
+    
+    private var actionButtonsCard: some View {
+        VStack(spacing: 12) {
             Button {
                 controller.triggerLocalNetworkPrompt()
                 controller.startPairing()
@@ -165,5 +192,54 @@ public struct AirLiftSetupView: View {
         .background(Theme.card)
         .cornerRadius(14)
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border, lineWidth: 1))
+    }
+    
+    private var guideCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle.fill")
+                    .foregroundColor(Theme.accent)
+                Text("HƯỚNG DẪN GHÉP ĐÔI NHÀ PHÁT TRIỂN")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Theme.accent)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                guideRow(step: "1", text: "Bấm 'Bắt Đầu Ghép Đôi' ở trên. Mã PIN 6 số sẽ xuất hiện và giữ nguyên.")
+                guideRow(step: "2", text: "Nếu có popup xin quyền 'Mạng cục bộ', bấm 'Cho phép'.")
+                guideRow(step: "3", text: "Vào Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Ghép đôi thiết bị.")
+                guideRow(step: "4", text: "Chọn 'AimHub Cheat' trong danh sách và nhập mã PIN 6 số.")
+                guideRow(step: "5", text: "Quay lại AimHub, mở LocalDevVPN rồi bấm 'Kiểm Tra Đường Hầm'.")
+            }
+            
+            Divider()
+                .background(Theme.border)
+                .padding(.vertical, 2)
+            
+            Text("Lưu ý: Nếu không thấy AimHub trong danh sách Ghép đôi, hãy vào Cài đặt > Quyền riêng tư & Bảo mật > Mạng cục bộ > Kiểm tra gạt BẬT cho AimHub.")
+                .font(.system(size: 11))
+                .foregroundColor(Theme.muted)
+                .lineSpacing(3)
+        }
+        .padding(16)
+        .background(Theme.card.opacity(0.7))
+        .cornerRadius(14)
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border.opacity(0.6), lineWidth: 1))
+    }
+    
+    private func guideRow(step: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(step)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 18, height: 18)
+                .background(Theme.accent)
+                .clipShape(Circle())
+            
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.85))
+                .lineSpacing(2)
+        }
     }
 }

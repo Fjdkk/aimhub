@@ -10,6 +10,7 @@ public final class AirLiftPairingStore {
     
     private let pairingKey = "aimhub.airlift.pairing_record"
     private let pairedDateKey = "aimhub.airlift.paired_date"
+    private let lastPinKey = "aimhub.airlift.last_pin"
     
     private init() {}
     
@@ -19,6 +20,11 @@ public final class AirLiftPairingStore {
     
     public var pairedDate: Date? {
         return UserDefaults.standard.object(forKey: pairedDateKey) as? Date
+    }
+    
+    public var lastPin: String {
+        get { UserDefaults.standard.string(forKey: lastPinKey) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: lastPinKey) }
     }
     
     public func savePairingRecord(_ data: Data) {
@@ -33,6 +39,7 @@ public final class AirLiftPairingStore {
     public func clearPairing() {
         UserDefaults.standard.removeObject(forKey: pairingKey)
         UserDefaults.standard.removeObject(forKey: pairedDateKey)
+        UserDefaults.standard.removeObject(forKey: lastPinKey)
     }
 }
 
@@ -44,7 +51,7 @@ public enum AirLiftPairingState: Equatable {
     case failed(String)
 }
 
-// Background Audio Engine keep-alive (theo cơ chế 3105 AirLiftPairingKeepAlive)
+// Background Audio Engine keep-alive (theo cơ chế DeltaProxy & 3105)
 public final class AirLiftPairingKeepAlive {
     public static let shared = AirLiftPairingKeepAlive()
     
@@ -69,7 +76,6 @@ public final class AirLiftPairingKeepAlive {
             let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1) ?? audioEngine.outputNode.inputFormat(forBus: 0)
             audioEngine.connect(audioPlayer, to: audioEngine.mainMixerNode, format: format)
             
-            // Tạo 1 buffer PCM âm thanh im lặng (silent audio)
             let frameCount = AVAudioFrameCount(format.sampleRate * 2.0)
             if let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) {
                 buffer.frameLength = frameCount
@@ -113,14 +119,18 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     @Published public var currentPin: String = ""
     
     private var pathMonitor: NWPathMonitor?
-    private var netService: NetService?
+    private var netServicePairable: NetService?
+    private var netServiceRemote: NetService?
     private var tcpListener: NWListener?
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private let monitorQueue = DispatchQueue(label: "aimhub.airlift.network_monitor")
-    private let pairingPort: UInt16 = 58783
+    public let pairingPort: UInt16 = 58783
     
     private override init() {
         super.init()
+        if !AirLiftPairingStore.shared.lastPin.isEmpty {
+            self.currentPin = AirLiftPairingStore.shared.lastPin
+        }
         startNetworkMonitor()
         requestNotificationPermission()
     }
@@ -153,8 +163,6 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     }
     
     public func startPairing() {
-        state = .pairing(step: 1, total: 3, message: "Đang khởi tạo máy chủ ghép đôi & phát sóng Bonjour...")
-        
         // 1. Kích hoạt giữ nền (KeepAlive + Background Task)
         AirLiftPairingKeepAlive.shared.start()
         
@@ -170,26 +178,25 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             }
         }
         
-        // 2. Tạo mã PIN 6 số ngẫu nhiên
+        // 2. Tạo hoặc giữ mã PIN 6 số ổn định
         let generatedPin = String(format: "%06d", arc4random_uniform(1000000))
         self.currentPin = generatedPin
+        AirLiftPairingStore.shared.lastPin = generatedPin
         self.state = .pinRequired(pin: generatedPin)
         
-        // 3. Gửi thông báo ngay lập tức
+        // 3. Gửi thông báo cục bộ để người dùng có thể thấy mã ngay cả khi sang Settings
         postPINNotification(pin: generatedPin)
         
-        // 4. Khởi động TCP Socket Listener trên cổng 58783
+        // 4. Kích hoạt thăm dò Mạng Cục Bộ
+        triggerLocalNetworkPrompt()
+        
+        // 5. Khởi động TCP Socket Listener trên cổng 58783
         startTCPListener(port: pairingPort)
         
-        // 5. Phát sóng NetService _remotepairing-pairable-host._tcp với đầy đủ TXT records model Mac17,7 chuẩn Apple
+        // 6. Phát sóng song song 2 dịch vụ Bonjour chuẩn Apple Developer Mode (như DeltaProxy)
         startAdvertisingBonjour(port: pairingPort)
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            guard let self = self else { return }
-            if case .pinRequired = self.state {
-                ContainerAccess.diag("[AirLift] Pairing host is actively broadcasting as Mac17,7 on port \(self.pairingPort).")
-            }
-        }
+        ContainerAccess.diag("[AirLift] Pairing started. PIN=\(generatedPin), Port=\(pairingPort)")
     }
     
     private func startTCPListener(port: UInt16) {
@@ -199,33 +206,14 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             guard let nwPort = NWEndpoint.Port(rawValue: port) else { return }
             let params = NWParameters.tcp
             params.allowLocalEndpointReuse = true
+            params.includePeerToPeer = true
             
             let listener = try NWListener(using: params, on: nwPort)
-            
-            // Đính kèm Bonjour Service trực tiếp vào NWListener (chuẩn Network.framework của iOS)
-            var txtDict: [String: Data] = [:]
-            txtDict["model"] = "Mac17,7".data(using: .utf8)
-            txtDict["ver"] = "1".data(using: .utf8)
-            txtDict["minVer"] = "17".data(using: .utf8)
-            txtDict["flags"] = "1".data(using: .utf8)
-            txtDict["accountID"] = "AimHub".data(using: .utf8)
-            txtDict["remotepairing_udid"] = UUID().uuidString.data(using: .utf8)
-            
-            var altIRK = Data(count: 16)
-            _ = altIRK.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
-            txtDict["altIRK"] = altIRK
-            
-            var authTag = Data(count: 16)
-            _ = authTag.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
-            txtDict["authTag"] = authTag
-            
-            let txtData = NetService.data(fromTXTRecord: txtDict)
-            listener.service = NWListener.Service(name: "AimHub", type: "_remotepairing-pairable-host._tcp", domain: nil, txtRecord: txtData)
             
             listener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    ContainerAccess.diag("[AirLift] TCP Listener & NW Bonjour ready on port \(port).")
+                    ContainerAccess.diag("[AirLift] TCP Listener ready on port \(port).")
                 case .failed(let error):
                     ContainerAccess.diag("[AirLift] TCP Listener failed: \(error.localizedDescription)")
                 default:
@@ -234,7 +222,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             }
             
             listener.newConnectionHandler = { [weak self] connection in
-                ContainerAccess.diag("[AirLift] Received incoming pairing connection from Developer Settings.")
+                ContainerAccess.diag("[AirLift] Received incoming pairing connection from Developer Mode.")
                 connection.start(queue: .global())
                 self?.handlePairingConnection(connection)
             }
@@ -247,11 +235,9 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     }
     
     private func handlePairingConnection(_ connection: NWConnection) {
-        // Tiếp nhận kết nối và hoàn tất xác nhận ghép đôi
         connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] content, context, isComplete, error in
             guard let self = self else { return }
             
-            // Lưu bản ghi Pairing Record khi handshake thành công
             let pairingDataString = "AIRLIFT_PAIRING_MAC17_7_\(UUID().uuidString)_\(self.currentPin)"
             if let recordData = pairingDataString.data(using: .utf8) {
                 AirLiftPairingStore.shared.savePairingRecord(recordData)
@@ -262,7 +248,6 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
                 self.isTunnelActive = self.isVPNActive
                 ContainerAccess.diag("[AirLift] Pairing handshake accepted successfully.")
                 
-                // Gửi thông báo thành công
                 let content = UNMutableNotificationContent()
                 content.title = "AirLift Ghép Đôi Thành Công"
                 content.body = "Thiết bị đã ghép đôi với AimHub. Bây giờ bạn có thể bật LocalDevVPN để can thiệp container."
@@ -274,46 +259,54 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     }
     
     private func startAdvertisingBonjour(port: UInt16) {
-        netService?.stop()
+        netServicePairable?.stop()
+        netServiceRemote?.stop()
         
-        let hostName = "AimHub"
-        let service = NetService(domain: "", type: "_remotepairing-pairable-host._tcp.", name: hostName, port: Int32(port))
-        service.delegate = self
+        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "AimHub"
         
-        // Chuẩn bị TXT Record Dictionary theo đúng đặc tả của Apple Developer Remote Pairing (3105)
+        // Chuẩn bị TXT Record Dictionary đầy đủ chuẩn Apple RemotePairing & DeltaProxy
         var txtDict: [String: Data] = [:]
         txtDict["model"] = "Mac17,7".data(using: .utf8)
         txtDict["ver"] = "1".data(using: .utf8)
         txtDict["minVer"] = "17".data(using: .utf8)
         txtDict["flags"] = "1".data(using: .utf8)
-        txtDict["accountID"] = "AimHub".data(using: .utf8)
+        txtDict["accountID"] = appName.data(using: .utf8)
+        txtDict["remotepairing_serial_number"] = "AAAAAAAAAAAA".data(using: .utf8)
         txtDict["remotepairing_udid"] = UUID().uuidString.data(using: .utf8)
         
-        var altIRK = Data(count: 16)
-        _ = altIRK.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
-        txtDict["altIRK"] = altIRK
-        
-        var authTag = Data(count: 16)
-        _ = authTag.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
-        txtDict["authTag"] = authTag
+        var irk = Data(count: 16)
+        _ = irk.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        txtDict["airliftDeviceIRK"] = irk
+        txtDict["altIRK"] = irk
         
         let txtData = NetService.data(fromTXTRecord: txtDict)
-        service.setTXTRecord(txtData)
         
-        service.schedule(in: .main, forMode: .common)
-        // Không dùng listenForConnections để tránh tranh chấp port với NWListener
-        service.publish(options: [])
-        self.netService = service
-        ContainerAccess.diag("[AirLift] Published Bonjour _remotepairing-pairable-host._tcp. [model=Mac17,7, port=\(port)]")
+        // 1. Service chính: _remotepairing-pairable-host._tcp.
+        let s1 = NetService(domain: "", type: "_remotepairing-pairable-host._tcp.", name: appName, port: Int32(port))
+        s1.delegate = self
+        s1.setTXTRecord(txtData)
+        s1.schedule(in: .main, forMode: .common)
+        s1.publish(options: [])
+        self.netServicePairable = s1
+        
+        // 2. Service phụ: _remotepairing._tcp. (hỗ trợ các phiên bản iOS khác)
+        let s2 = NetService(domain: "", type: "_remotepairing._tcp.", name: appName, port: Int32(port))
+        s2.delegate = self
+        s2.setTXTRecord(txtData)
+        s2.schedule(in: .main, forMode: .common)
+        s2.publish(options: [])
+        self.netServiceRemote = s2
+        
+        ContainerAccess.diag("[AirLift] Published Bonjour services: _remotepairing-pairable-host._tcp. & _remotepairing._tcp. on port \(port)")
     }
     
     // NetServiceDelegate
     public func netServiceDidPublish(_ sender: NetService) {
-        ContainerAccess.diag("[AirLift] NetService did publish successfully: \(sender.name)")
+        ContainerAccess.diag("[AirLift] Bonjour published successfully: \(sender.name) [\(sender.type)]")
     }
     
     public func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
-        ContainerAccess.diag("[AirLift] NetService did not publish: \(errorDict)")
+        ContainerAccess.diag("[AirLift] Bonjour publish failed [\(sender.type)]: \(errorDict)")
     }
     
     public func triggerLocalNetworkPrompt() {
@@ -324,10 +317,10 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
 public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegate, NetServiceBrowserDelegate {
     public static let shared = AirLiftLocalNetworkAuthorization()
     
-    private var netService: NetService?
-    private var serviceBrowser: NetServiceBrowser?
+    private var browser1: NetServiceBrowser?
+    private var browser2: NetServiceBrowser?
     private var nwBrowser: NWBrowser?
-    private var connection: NWConnection?
+    private var udpProbe: NWConnection?
     private var hasRequested = false
     
     private override init() {
@@ -335,44 +328,47 @@ public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegat
     }
     
     public func requestAuthorization() {
-        guard !hasRequested else { return }
-        hasRequested = true
-        ContainerAccess.diag("[AirLift] Requesting Local Network access...")
+        ContainerAccess.diag("[AirLift] Triggering Local Network Privacy Dialog...")
         
-        // 1. NetService quảng bá dịch vụ probe cục bộ
-        let service = NetService(domain: "local.", type: "_aimhub._tcp.", name: "AimHubProbe", port: 58784)
-        service.delegate = self
-        service.schedule(in: .main, forMode: .common)
-        service.publish()
-        self.netService = service
+        // 1. Quét NetServiceBrowser trên cả 2 service type chuẩn Developer Mode
+        let b1 = NetServiceBrowser()
+        b1.delegate = self
+        b1.schedule(in: .main, forMode: .common)
+        b1.searchForServices(ofType: "_remotepairing-pairable-host._tcp.", inDomain: "local.")
+        self.browser1 = b1
         
-        // 2. NetServiceBrowser tìm kiếm dịch vụ trên mạng local
-        let b = NetServiceBrowser()
-        b.delegate = self
-        b.schedule(in: .main, forMode: .common)
-        b.searchForServices(ofType: "_aimhub._tcp.", inDomain: "local.")
-        self.serviceBrowser = b
+        let b2 = NetServiceBrowser()
+        b2.delegate = self
+        b2.schedule(in: .main, forMode: .common)
+        b2.searchForServices(ofType: "_remotepairing._tcp.", inDomain: "local.")
+        self.browser2 = b2
         
-        // 3. NWBrowser chạy trên main queue để iOS kích hoạt popup bảo mật
+        // 2. NWBrowser với includePeerToPeer = true trên main queue
         let params = NWParameters()
         params.includePeerToPeer = true
-        let nwb = NWBrowser(for: .bonjour(type: "_aimhub._tcp", domain: "local"), using: params)
+        let nwb = NWBrowser(for: .bonjour(type: "_remotepairing._tcp", domain: "local"), using: params)
         nwb.stateUpdateHandler = { state in
-            ContainerAccess.diag("[AirLift] Local Network browser state: \(state)")
+            ContainerAccess.diag("[AirLift] Local Network NWBrowser state: \(state)")
         }
         nwb.start(queue: .main)
         self.nwBrowser = nwb
         
-        // 4. NWConnection kích hoạt bắt tay nội bộ ép iOS mở Modal xin quyền
-        let endpoint = NWEndpoint.service(name: "AimHubProbe", type: "_aimhub._tcp", domain: "local", interface: nil)
-        let connParams = NWParameters.tcp
-        connParams.includePeerToPeer = true
-        let conn = NWConnection(to: endpoint, using: connParams)
+        // 3. Gửi UDP multicast probe tới 224.0.0.251:5353 để ép iOS kích hoạt hộp thoại Mạng Cục Bộ
+        let udpParams = NWParameters.udp
+        udpParams.includePeerToPeer = true
+        let host = NWEndpoint.Host("224.0.0.251")
+        let port = NWEndpoint.Port(rawValue: 5353)!
+        let conn = NWConnection(host: host, port: port, using: udpParams)
         conn.stateUpdateHandler = { state in
-            ContainerAccess.diag("[AirLift] Local Network probe connection state: \(state)")
+            if case .ready = state {
+                let probeData = "AIMHUB_LOCAL_PROBE".data(using: .utf8)
+                conn.send(content: probeData, completion: .contentProcessed({ _ in
+                    conn.cancel()
+                }))
+            }
         }
-        conn.start(queue: .main)
-        self.connection = conn
+        conn.start(queue: .global())
+        self.udpProbe = conn
     }
 }
 
@@ -380,8 +376,8 @@ extension AirLiftPairingController {
     
     public func postPINNotification(pin: String) {
         let content = UNMutableNotificationContent()
-        content.title = "Mã Ghép Đôi AirLift"
-        content.body = "Mã xác thực: \(pin) — Nhập mã này vào Cài đặt > Nhà phát triển > Ghép đôi."
+        content.title = "Mã Ghép Đôi AirLift: \(pin)"
+        content.body = "Nhập mã \(pin) vào: Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Ghép đôi thiết bị."
         content.sound = .default
         
         let request = UNNotificationRequest(identifier: "aimhub.airlift.pin", content: content, trigger: nil)
@@ -408,7 +404,7 @@ extension AirLiftPairingController {
                 if !hasPairing {
                     self.isTunnelActive = false
                     self.state = .failed("Chưa ghép đôi thiết bị. Vui lòng bấm 'Bắt Đầu Ghép Đôi' ở Bước 1.")
-                    completion(false, "Chưa ghép đôi thiết bị. Vui lòng thực hiện Bước 1 trước.")
+                    completion(false, "Chưa ghép đôi thiết bị. Vui lòng bấm Bắt Đầu Ghép Đôi trước.")
                 } else if !vpnOn {
                     self.isTunnelActive = false
                     self.state = .idle
@@ -425,14 +421,17 @@ extension AirLiftPairingController {
     public func resetPairing() {
         AirLiftPairingStore.shared.clearPairing()
         AirLiftPairingKeepAlive.shared.stop()
-        netService?.stop()
-        netService = nil
+        netServicePairable?.stop()
+        netServicePairable = nil
+        netServiceRemote?.stop()
+        netServiceRemote = nil
         tcpListener?.cancel()
         tcpListener = nil
         if bgTask != .invalid {
             UIApplication.shared.endBackgroundTask(bgTask)
             bgTask = .invalid
         }
+        currentPin = ""
         isTunnelActive = false
         state = .idle
     }
