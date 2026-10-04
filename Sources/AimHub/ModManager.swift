@@ -136,8 +136,34 @@ enum POSIXFile {
         let dir = (path as NSString).deletingLastPathComponent
         try createDirectory(atPath: dir, withIntermediateDirectories: true)
 
+        // Log chi tiết quyền thư mục cha
+        var dirStat = stat()
+        if stat(dir, &dirStat) == 0 {
+            let perms = String(dirStat.st_mode & 0o7777, radix: 8)
+            ContainerAccess.diag("[IO] Dir \(dir) mode=0o\(perms) uid=\(dirStat.st_uid) gid=\(dirStat.st_gid)")
+        } else {
+            ContainerAccess.diag("[IO] ⚠️ stat dir \(dir) thất bại: \(errnoMessage())")
+        }
+
+        // Kiểm tra file tồn tại trước khi ghi
+        var fileStat = stat()
+        if stat(path, &fileStat) == 0 {
+            let perms = String(fileStat.st_mode & 0o7777, radix: 8)
+            ContainerAccess.diag("[IO] File đã tồn tại: \(path) mode=0o\(perms) size=\(fileStat.st_size)")
+        }
+
         let fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
-        guard fd >= 0 else { throw POSIXFileError.io("open \(path) thất bại: \(errnoMessage())") }
+        guard fd >= 0 else {
+            let errNo = errno
+            let errMsg = errnoMessage()
+            ContainerAccess.diag("[IO] ❌ open() thất bại: errno=\(errNo) (\(errMsg)) path=\(path)")
+            if errNo == EPERM {
+                ContainerAccess.diag("[IO] ❌ EPERM → Sandbox extension chưa được kích hoạt hoặc đã bị thu hồi")
+            } else if errNo == EACCES {
+                ContainerAccess.diag("[IO] ❌ EACCES → Không đủ quyền truy cập file/thư mục")
+            }
+            throw POSIXFileError.io("open \(path) thất bại: \(errMsg)")
+        }
         defer { close(fd) }
 
         var written = 0
@@ -152,6 +178,7 @@ enum POSIXFile {
         guard written == data.count else {
             throw POSIXFileError.io("ghi \(path) không đầy đủ (\(written)/\(data.count))")
         }
+        ContainerAccess.diag("[IO] ✅ Ghi thành công \(written) bytes → \((path as NSString).lastPathComponent)")
     }
 }
 
@@ -164,9 +191,26 @@ public final class ModManager {
     private var containerRoot: String?
 
     public func prepareContainer(bundleID: String) throws -> String {
+        ContainerAccess.diag("[Container] Đang truy vấn container cho \(bundleID)...")
         let path = try ContainerAccess.shared.gameContainerPath(bundleID: bundleID)
         guard POSIXFile.isDirectory(path) else {
+            ContainerAccess.diag("[Container] ❌ Path tìm được không phải thư mục: \(path)")
             throw ModManagerError.containerUnavailable
+        }
+        // Kiểm tra quyền ghi thực tế vào container
+        let testPath = (path as NSString).appendingPathComponent(".aimhub_sandbox_test")
+        let testFd = open(testPath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR)
+        if testFd >= 0 {
+            close(testFd)
+            unlink(testPath)
+            ContainerAccess.diag("[Container] ✅ Container OK + quyền ghi xác nhận: \(path)")
+        } else {
+            let errNo = errno
+            let errMsg = String(cString: strerror(errNo)!)
+            ContainerAccess.diag("[Container] ⚠️ Container tìm được nhưng KHÔNG CÓ QUYỀN GHI: errno=\(errNo) (\(errMsg))")
+            if errNo == EPERM {
+                ContainerAccess.diag("[Container] ⚠️ EPERM → Sandbox extension chưa activate hoặc bị iOS thu hồi")
+            }
         }
         containerRoot = path
         return path
@@ -377,9 +421,11 @@ public final class ModManager {
     }
 
     private func writeFile(data: Data, to path: String) throws {
+        ContainerAccess.diag("[Mod] Ghi file: \((path as NSString).lastPathComponent) (\(data.count) bytes)")
         do {
             try POSIXFile.write(data: data, to: path)
         } catch {
+            ContainerAccess.diag("[Mod] ❌ Ghi file thất bại: \(error.localizedDescription)")
             throw ModManagerError.ioFailed(error.localizedDescription)
         }
     }

@@ -513,8 +513,8 @@ final class AppState: ObservableObject {
     func log(_ message: String, level: LogLevel = .info) {
         let entry = LogEntry(time: Date(), message: message, level: level)
         sessionLog.insert(entry, at: 0)
-        if sessionLog.count > 200 {
-            sessionLog.removeLast(sessionLog.count - 200)
+        if sessionLog.count > 500 {
+            sessionLog.removeLast(sessionLog.count - 500)
         }
     }
 

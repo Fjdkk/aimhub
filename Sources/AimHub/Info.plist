@@ -71,10 +71,6 @@
 		<string>_3105airlift._tcp</string>
 		<string>_aimhub._tcp</string>
 	</array>
-	<key>UIFileSharingEnabled</key>
-	<true/>
-	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

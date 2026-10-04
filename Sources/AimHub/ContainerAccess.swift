@@ -35,52 +35,60 @@ public final class ContainerAccess {
 
         // Tier 0: Kiểm tra bộ nhớ đệm (Cache Store) siêu tốc
         if let cached = ContainerCacheStore.shared.getCachedPath(for: bundleID) {
-            Self.diag("Container Cache HIT (siêu tốc 0.01s): \(cached)")
+            Self.diag("[Tier0] ✅ Cache HIT (0.01s): \(cached)")
             return cached
         }
+        Self.diag("[Tier0] Cache MISS → tiếp tục tìm kiếm...")
 
         // Tier 1: Kernel Sandbox Escape (KExploit cho iOS 14 - 16.1.2)
         if KExploitEngine.shared.tryEscapeSandbox() {
-            Self.diag("KExploit kích hoạt thành công")
+            Self.diag("[Tier1] ✅ KExploit kích hoạt thành công")
+        } else {
+            Self.diag("[Tier1] ⚠️ KExploit không khả dụng (iOS version không hỗ trợ hoặc đã vá)")
         }
 
         // Tier 2: MCM Basic & Advanced
         if let mcm = mcm {
-            _ = mcm.escapeSandboxViaSystemGroup()
+            let sbxResult = mcm.escapeSandboxViaSystemGroup()
+            Self.diag("[Tier2] Sandbox escape via SystemGroup: \(sbxResult ? "✅ OK" : "❌ FAIL")")
             do {
                 let path = try mcm.containerPathBasic(forBundleID: bundleID)
-                Self.diag("MCM basic OK: \(path)")
+                Self.diag("[Tier2] ✅ MCM basic OK: \(path)")
                 ContainerCacheStore.shared.setCachedPath(path, for: bundleID)
                 return path
             } catch {
-                Self.diag("MCM basic FAIL: \(error.localizedDescription)")
+                Self.diag("[Tier2] MCM basic FAIL: \(error.localizedDescription)")
             }
 
             do {
                 let path = try mcm.containerPath(forBundleID: bundleID)
-                Self.diag("MCM advanced OK: \(path)")
+                Self.diag("[Tier2] ✅ MCM advanced OK: \(path)")
                 ContainerCacheStore.shared.setCachedPath(path, for: bundleID)
                 return path
             } catch {
-                Self.diag("MCM advanced FAIL: \(error.localizedDescription)")
+                Self.diag("[Tier2] MCM advanced FAIL: \(error.localizedDescription)")
             }
 
             do {
                 if let path = try mcm.containerPathByIterating(forBundleID: bundleID) {
-                    Self.diag("MCM by iterating OK: \(path)")
+                    Self.diag("[Tier2] ✅ MCM iterate OK: \(path)")
                     ContainerCacheStore.shared.setCachedPath(path, for: bundleID)
                     return path
                 }
             } catch {
-                Self.diag("MCM iterate FAIL: \(error.localizedDescription)")
+                Self.diag("[Tier2] MCM iterate FAIL: \(error.localizedDescription)")
             }
+        } else {
+            Self.diag("[Tier2] MCM không khả dụng (dlopen failed)")
         }
 
         // Tier 3: LaunchServices LSApplicationProxy (via canmaplsdatabase)
         if let lsPath = AppLauncher.containerPath(bundleID: bundleID) {
-            Self.diag("LaunchServices container OK: \(lsPath)")
+            Self.diag("[Tier3] ✅ LaunchServices container OK: \(lsPath)")
             ContainerCacheStore.shared.setCachedPath(lsPath, for: bundleID)
             return lsPath
+        } else {
+            Self.diag("[Tier3] LaunchServices FAIL")
         }
 
         // Tier 4: Direct Containers Filesystem Scan (POSIX + FileManager)
@@ -135,7 +143,7 @@ public final class ContainerAccess {
             Self.diag("AirLift Tunnel is paired and ready as active transport")
         }
 
-        Self.diag(">>> Tất cả phương pháp thất bại cho \(bundleID)")
+        Self.diag("[FAIL] ❌ Tất cả 6 tier đều thất bại cho \(bundleID) → Không tìm được container game")
         throw ModManagerError.containerUnavailable
     }
 

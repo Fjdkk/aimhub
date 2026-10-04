@@ -262,7 +262,8 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         netServicePairable?.stop()
         netServiceRemote?.stop()
         
-        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "AimHub"
+        // Tên dịch vụ chuẩn không dấu cách để tránh lỗi phân giải RFC 6763 trên Apple remotepairingd
+        let appName = "AimHub"
         
         // Chuẩn bị TXT Record Dictionary đầy đủ chuẩn Apple RemotePairing & DeltaProxy
         var txtDict: [String: Data] = [:]
@@ -284,6 +285,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         // 1. Service chính: _remotepairing-pairable-host._tcp.
         let s1 = NetService(domain: "", type: "_remotepairing-pairable-host._tcp.", name: appName, port: Int32(port))
         s1.delegate = self
+        s1.includesPeerToPeer = true
         s1.setTXTRecord(txtData)
         s1.schedule(in: .main, forMode: .common)
         s1.publish(options: [])
@@ -292,12 +294,13 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         // 2. Service phụ: _remotepairing._tcp. (hỗ trợ các phiên bản iOS khác)
         let s2 = NetService(domain: "", type: "_remotepairing._tcp.", name: appName, port: Int32(port))
         s2.delegate = self
+        s2.includesPeerToPeer = true
         s2.setTXTRecord(txtData)
         s2.schedule(in: .main, forMode: .common)
         s2.publish(options: [])
         self.netServiceRemote = s2
         
-        ContainerAccess.diag("[AirLift] Published Bonjour services: _remotepairing-pairable-host._tcp. & _remotepairing._tcp. on port \(port)")
+        ContainerAccess.diag("[AirLift] Published Bonjour services with includesPeerToPeer=true: _remotepairing-pairable-host._tcp. & _remotepairing._tcp. on port \(port)")
     }
     
     // NetServiceDelegate
@@ -317,8 +320,8 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
 public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegate, NetServiceBrowserDelegate {
     public static let shared = AirLiftLocalNetworkAuthorization()
     
-    private var browser1: NetServiceBrowser?
-    private var browser2: NetServiceBrowser?
+    private var probeService: NetService?
+    private var browser: NetServiceBrowser?
     private var nwBrowser: NWBrowser?
     private var udpProbe: NWConnection?
     private var hasRequested = false
@@ -328,32 +331,38 @@ public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegat
     }
     
     public func requestAuthorization() {
-        ContainerAccess.diag("[AirLift] Triggering Local Network Privacy Dialog...")
+        guard !hasRequested else { return }
+        hasRequested = true
         
-        // 1. Quét NetServiceBrowser trên cả 2 service type chuẩn Developer Mode
-        let b1 = NetServiceBrowser()
-        b1.delegate = self
-        b1.schedule(in: .main, forMode: .common)
-        b1.searchForServices(ofType: "_remotepairing-pairable-host._tcp.", inDomain: "local.")
-        self.browser1 = b1
+        ContainerAccess.diag("[AirLift] Triggering Local Network Privacy Dialog (3105 standard)...")
         
-        let b2 = NetServiceBrowser()
-        b2.delegate = self
-        b2.schedule(in: .main, forMode: .common)
-        b2.searchForServices(ofType: "_remotepairing._tcp.", inDomain: "local.")
-        self.browser2 = b2
+        // 1. Tạo probe NetService trên domain local.
+        let service = NetService(domain: "local.", type: "_3105airlift._tcp.", name: "3105AirLiftProbe", port: 58784)
+        service.delegate = self
+        service.includesPeerToPeer = true
+        service.schedule(in: .main, forMode: .common)
+        service.publish()
+        self.probeService = service
         
-        // 2. NWBrowser với includePeerToPeer = true trên main queue
+        // 2. Dùng NetServiceBrowser quét chính _3105airlift._tcp. trên main runloop để ép iOS 18 mở bảng radar
+        let b = NetServiceBrowser()
+        b.delegate = self
+        b.includesPeerToPeer = true
+        b.schedule(in: .main, forMode: .common)
+        b.searchForServices(ofType: "_3105airlift._tcp.", inDomain: "local.")
+        self.browser = b
+        
+        // 3. NWBrowser với includePeerToPeer = true trên main queue
         let params = NWParameters()
         params.includePeerToPeer = true
-        let nwb = NWBrowser(for: .bonjour(type: "_remotepairing._tcp", domain: "local"), using: params)
+        let nwb = NWBrowser(for: .bonjour(type: "_3105airlift._tcp", domain: "local"), using: params)
         nwb.stateUpdateHandler = { state in
             ContainerAccess.diag("[AirLift] Local Network NWBrowser state: \(state)")
         }
         nwb.start(queue: .main)
         self.nwBrowser = nwb
         
-        // 3. Gửi UDP multicast probe tới 224.0.0.251:5353 để ép iOS kích hoạt hộp thoại Mạng Cục Bộ
+        // 4. Gửi UDP multicast probe tới 224.0.0.251:5353 để ép iOS kích hoạt hộp thoại Mạng Cục Bộ
         let udpParams = NWParameters.udp
         udpParams.includePeerToPeer = true
         let host = NWEndpoint.Host("224.0.0.251")

@@ -228,7 +228,12 @@ public final class MCMContainer {
         let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            _ = try? activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
+            do {
+                try activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
+                ContainerAccess.diag("[SBX] ✅ Sandbox extension activated (basic) cho \(id)")
+            } catch {
+                ContainerAccess.diag("[SBX] ⚠️ Sandbox extension FAILED (basic) cho \(id): \(error.localizedDescription)")
+            }
         }
 
         return path
@@ -267,7 +272,12 @@ public final class MCMContainer {
                 guard let p = fns.objectGetPath(candidate) else { return true }
                 iteratedPath = normalizePath(String(cString: p))
                 if activateExtension {
-                    _ = try? activateSandboxExtension(on: candidate, key: "\(cls.rawValue):\(id)")
+                    do {
+                        try activateSandboxExtension(on: candidate, key: "\(cls.rawValue):\(id)")
+                        ContainerAccess.diag("[SBX] ✅ Sandbox extension activated (iterate) cho \(id)")
+                    } catch {
+                        ContainerAccess.diag("[SBX] ⚠️ Sandbox extension FAILED (iterate) cho \(id): \(error.localizedDescription)")
+                    }
                 }
                 return true
             }
@@ -287,7 +297,12 @@ public final class MCMContainer {
         let path = normalizePath(String(cString: pathPtr))
 
         if activateExtension {
-            _ = try? activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
+            do {
+                try activateSandboxExtension(on: obj, key: "\(cls.rawValue):\(id)")
+                ContainerAccess.diag("[SBX] ✅ Sandbox extension activated (advanced) cho \(id)")
+            } catch {
+                ContainerAccess.diag("[SBX] ⚠️ Sandbox extension FAILED (advanced) cho \(id): \(error.localizedDescription)")
+            }
         }
 
         return path
@@ -346,6 +361,7 @@ public final class MCMContainer {
             }()
             if ident == bundleID, let path = path {
                 _ = try? activateSandboxExtension(on: current, key: "\(cls.rawValue):\(bundleID)")
+                ContainerAccess.diag("[SBX] Sandbox extension (byIterating) cho \(bundleID)")
                 foundPath = normalizePath(path)
                 return false
             }
