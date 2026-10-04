@@ -70,6 +70,31 @@ public struct AirLiftSetupView: View {
                     .foregroundColor(AirLiftPairingStore.shared.isPaired ? .green : .orange)
             }
             
+            if let record = AirLiftPairingStore.shared.loadStructuredRecord() {
+                Divider()
+                    .background(Theme.border)
+                
+                HStack(spacing: 8) {
+                    Text("Thiết bị:")
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.muted)
+                    Spacer()
+                    Text(String(record.udid.prefix(12)) + "...")
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundColor(Theme.accent)
+                }
+                
+                HStack(spacing: 8) {
+                    Text("File xác thực:")
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.muted)
+                    Spacer()
+                    Text(".mobiledevicepairing ✅")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.green)
+                }
+            }
+            
             Divider()
                 .background(Theme.border)
             

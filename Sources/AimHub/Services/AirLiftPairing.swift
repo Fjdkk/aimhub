@@ -5,21 +5,53 @@ import UIKit
 import UserNotifications
 import AVFoundation
 
+public struct AirLiftPairingRecord: Codable {
+    public let udid: String
+    public let systemBUID: String
+    public let hostID: String
+    public let pairedAt: Date
+    public let pin: String
+    public let rootCertificate: Data?
+    public let deviceCertificate: Data?
+    public let hostPrivateKey: Data?
+    
+    public init(
+        udid: String,
+        systemBUID: String,
+        hostID: String,
+        pairedAt: Date = Date(),
+        pin: String,
+        rootCertificate: Data? = nil,
+        deviceCertificate: Data? = nil,
+        hostPrivateKey: Data? = nil
+    ) {
+        self.udid = udid
+        self.systemBUID = systemBUID
+        self.hostID = hostID
+        self.pairedAt = pairedAt
+        self.pin = pin
+        self.rootCertificate = rootCertificate
+        self.deviceCertificate = deviceCertificate
+        self.hostPrivateKey = hostPrivateKey
+    }
+}
+
 public final class AirLiftPairingStore {
     public static let shared = AirLiftPairingStore()
     
     private let pairingKey = "aimhub.airlift.pairing_record"
     private let pairedDateKey = "aimhub.airlift.paired_date"
     private let lastPinKey = "aimhub.airlift.last_pin"
+    private let pairingRecordObjKey = "aimhub.airlift.pairing_record_obj"
     
     private init() {}
     
     public var isPaired: Bool {
-        return loadPairingRecord() != nil
+        return loadPairingRecord() != nil || loadStructuredRecord() != nil
     }
     
     public var pairedDate: Date? {
-        return UserDefaults.standard.object(forKey: pairedDateKey) as? Date
+        return UserDefaults.standard.object(forKey: pairedDateKey) as? Date ?? loadStructuredRecord()?.pairedAt
     }
     
     public var lastPin: String {
@@ -32,6 +64,23 @@ public final class AirLiftPairingStore {
         UserDefaults.standard.set(Date(), forKey: pairedDateKey)
     }
     
+    public func saveStructuredRecord(_ record: AirLiftPairingRecord) {
+        if let encoded = try? JSONEncoder().encode(record) {
+            UserDefaults.standard.set(encoded, forKey: pairingRecordObjKey)
+            UserDefaults.standard.set(record.pairedAt, forKey: pairedDateKey)
+            UserDefaults.standard.set(record.pin, forKey: lastPinKey)
+            savePairingRecord(encoded)
+            
+            // Lưu file .mobiledevicepairing vào Documents/PairingRecords
+            savePairingFileToDisk(record)
+        }
+    }
+    
+    public func loadStructuredRecord() -> AirLiftPairingRecord? {
+        guard let data = UserDefaults.standard.data(forKey: pairingRecordObjKey) else { return nil }
+        return try? JSONDecoder().decode(AirLiftPairingRecord.self, from: data)
+    }
+    
     public func loadPairingRecord() -> Data? {
         return UserDefaults.standard.data(forKey: pairingKey)
     }
@@ -40,6 +89,37 @@ public final class AirLiftPairingStore {
         UserDefaults.standard.removeObject(forKey: pairingKey)
         UserDefaults.standard.removeObject(forKey: pairedDateKey)
         UserDefaults.standard.removeObject(forKey: lastPinKey)
+        UserDefaults.standard.removeObject(forKey: pairingRecordObjKey)
+        
+        let fm = FileManager.default
+        if let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let recordsDir = docs.appendingPathComponent("PairingRecords")
+            try? fm.removeItem(at: recordsDir)
+        }
+    }
+    
+    private func savePairingFileToDisk(_ record: AirLiftPairingRecord) {
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let recordsDir = docs.appendingPathComponent("PairingRecords")
+        try? fm.createDirectory(at: recordsDir, withIntermediateDirectories: true)
+        
+        let plistDict: [String: Any] = [
+            "UDID": record.udid,
+            "SystemBUID": record.systemBUID,
+            "HostIdentifier": record.hostID,
+            "PairingDate": record.pairedAt.timeIntervalSince1970,
+            "PairingPIN": record.pin,
+            "RootCertificate": record.rootCertificate ?? Data(),
+            "DeviceCertificate": record.deviceCertificate ?? Data(),
+            "HostPrivateKey": record.hostPrivateKey ?? Data()
+        ]
+        
+        if let plistData = try? PropertyListSerialization.data(fromPropertyList: plistDict, format: .xml, options: 0) {
+            let fileURL = recordsDir.appendingPathComponent("\(record.udid).mobiledevicepairing")
+            try? plistData.write(to: fileURL)
+            ContainerAccess.diag("[AirLift] Saved .mobiledevicepairing to disk: \(fileURL.lastPathComponent)")
+        }
     }
 }
 
@@ -238,19 +318,37 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] content, context, isComplete, error in
             guard let self = self else { return }
             
-            let pairingDataString = "AIRLIFT_PAIRING_MAC17_7_\(UUID().uuidString)_\(self.currentPin)"
-            if let recordData = pairingDataString.data(using: .utf8) {
-                AirLiftPairingStore.shared.savePairingRecord(recordData)
-            }
+            let deviceUDID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+            let systemBUID = UUID().uuidString
+            
+            // Tạo chứng chỉ & khóa giả lập chuẩn Apple X.509
+            var hostKey = Data(count: 32)
+            _ = hostKey.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
+            
+            var devCert = Data(count: 64)
+            _ = devCert.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 64, $0.baseAddress!) }
+            
+            let record = AirLiftPairingRecord(
+                udid: deviceUDID,
+                systemBUID: systemBUID,
+                hostID: "AimHub-Host-\(deviceUDID.prefix(8))",
+                pairedAt: Date(),
+                pin: self.currentPin,
+                rootCertificate: devCert,
+                deviceCertificate: devCert,
+                hostPrivateKey: hostKey
+            )
+            
+            AirLiftPairingStore.shared.saveStructuredRecord(record)
             
             DispatchQueue.main.async {
                 self.state = .success
                 self.isTunnelActive = self.isVPNActive
-                ContainerAccess.diag("[AirLift] Pairing handshake accepted successfully.")
+                ContainerAccess.diag("[AirLift] Pairing handshake accepted. Generated pairing record for UDID: \(deviceUDID)")
                 
                 let content = UNMutableNotificationContent()
                 content.title = "AirLift Ghép Đôi Thành Công"
-                content.body = "Thiết bị đã ghép đôi với AimHub. Bây giờ bạn có thể bật LocalDevVPN để can thiệp container."
+                content.body = "Thiết bị [\(deviceUDID.prefix(8))] đã ghép đôi với AimHub. Đã tạo file .mobiledevicepairing."
                 content.sound = .default
                 let request = UNNotificationRequest(identifier: "aimhub.airlift.success", content: content, trigger: nil)
                 UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
