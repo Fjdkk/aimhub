@@ -317,14 +317,66 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     }
     
     public func triggerLocalNetworkPrompt() {
-        // Gửi 1 kết nối nhẹ để iOS kích hoạt popup xin quyền Mạng cục bộ (Local Network)
-        let browser = NWBrowser(for: .bonjour(type: "_remotepairing-pairable-host._tcp", domain: nil), using: .tcp)
-        browser.stateUpdateHandler = { _ in }
-        browser.start(queue: DispatchQueue.global(qos: .background))
-        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 1.5) {
-            browser.cancel()
-        }
+        AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
     }
+}
+
+public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegate, NetServiceBrowserDelegate {
+    public static let shared = AirLiftLocalNetworkAuthorization()
+    
+    private var netService: NetService?
+    private var serviceBrowser: NetServiceBrowser?
+    private var nwBrowser: NWBrowser?
+    private var connection: NWConnection?
+    private var hasRequested = false
+    
+    private override init() {
+        super.init()
+    }
+    
+    public func requestAuthorization() {
+        guard !hasRequested else { return }
+        hasRequested = true
+        ContainerAccess.diag("[AirLift] Requesting Local Network access...")
+        
+        // 1. NetService quảng bá dịch vụ probe cục bộ
+        let service = NetService(domain: "local.", type: "_aimhub._tcp.", name: "AimHubProbe", port: 58784)
+        service.delegate = self
+        service.schedule(in: .main, forMode: .common)
+        service.publish()
+        self.netService = service
+        
+        // 2. NetServiceBrowser tìm kiếm dịch vụ trên mạng local
+        let b = NetServiceBrowser()
+        b.delegate = self
+        b.schedule(in: .main, forMode: .common)
+        b.searchForServices(ofType: "_aimhub._tcp.", inDomain: "local.")
+        self.serviceBrowser = b
+        
+        // 3. NWBrowser chạy trên main queue để iOS kích hoạt popup bảo mật
+        let params = NWParameters()
+        params.includePeerToPeer = true
+        let nwb = NWBrowser(for: .bonjour(type: "_aimhub._tcp", domain: "local"), using: params)
+        nwb.stateUpdateHandler = { state in
+            ContainerAccess.diag("[AirLift] Local Network browser state: \(state)")
+        }
+        nwb.start(queue: .main)
+        self.nwBrowser = nwb
+        
+        // 4. NWConnection kích hoạt bắt tay nội bộ ép iOS mở Modal xin quyền
+        let endpoint = NWEndpoint.service(name: "AimHubProbe", type: "_aimhub._tcp", domain: "local", interface: nil)
+        let connParams = NWParameters.tcp
+        connParams.includePeerToPeer = true
+        let conn = NWConnection(to: endpoint, using: connParams)
+        conn.stateUpdateHandler = { state in
+            ContainerAccess.diag("[AirLift] Local Network probe connection state: \(state)")
+        }
+        conn.start(queue: .main)
+        self.connection = conn
+    }
+}
+
+extension AirLiftPairingController {
     
     public func postPINNotification(pin: String) {
         let content = UNMutableNotificationContent()

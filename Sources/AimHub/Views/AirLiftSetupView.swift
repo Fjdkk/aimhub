@@ -41,6 +41,9 @@ public struct AirLiftSetupView: View {
                     dismissButton: .default(Text(L10n.t("airlift.close")))
                 )
             }
+            .onAppear {
+                AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
+            }
         }
     }
     
