@@ -255,24 +255,32 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     private func startAdvertisingBonjour(port: UInt16) {
         netService?.stop()
         
-        let hostName = "AimHub (" + UIDevice.current.name + ")"
-        let service = NetService(domain: "", type: "_remotepairing-pairable-host._tcp.", name: hostName, port: Int32(port))
+        let hostName = "AimHub"
+        let service = NetService(domain: "local.", type: "_remotepairing-pairable-host._tcp.", name: hostName, port: Int32(port))
         service.delegate = self
         
         // Chuẩn bị TXT Record Dictionary theo đúng đặc tả của Apple Developer Remote Pairing (3105)
         var txtDict: [String: Data] = [:]
         txtDict["model"] = "Mac17,7".data(using: .utf8)
-        txtDict["mac"] = "11:22:33:44:55:66".data(using: .utf8)
-        txtDict["remotepairing_udid"] = UUID().uuidString.data(using: .utf8)
+        txtDict["ver"] = "1".data(using: .utf8)
+        txtDict["minVer"] = "17".data(using: .utf8)
+        txtDict["flags"] = "1".data(using: .utf8)
         txtDict["accountID"] = "AimHub".data(using: .utf8)
-        txtDict["flags"] = "0x1".data(using: .utf8)
-        txtDict["authTag"] = Data(repeating: 0xAA, count: 16)
+        txtDict["remotepairing_udid"] = UUID().uuidString.data(using: .utf8)
+        
+        var altIRK = Data(count: 16)
+        _ = altIRK.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        txtDict["altIRK"] = altIRK
+        
+        var authTag = Data(count: 16)
+        _ = authTag.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        txtDict["authTag"] = authTag
         
         let txtData = NetService.data(fromTXTRecord: txtDict)
         service.setTXTRecord(txtData)
         
         service.schedule(in: .main, forMode: .common)
-        service.publish(options: [])
+        service.publish(options: [.listenForConnections])
         self.netService = service
         ContainerAccess.diag("[AirLift] Published Bonjour _remotepairing-pairable-host._tcp. [model=Mac17,7, port=\(port)]")
     }
