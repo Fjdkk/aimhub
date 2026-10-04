@@ -85,6 +85,7 @@ final class AppState: ObservableObject {
     private let server = ServerClient.shared
     private var started = false
     private let lastActiveKey = "aimhub.session.lastActiveAt"
+    private let sessionStartKey = "aimhub.session.startedAt"
     private let notificationsKey = "aimhub.notificationsEnabled"
     private let languageKey = "aimhub.language"
     private let hasSelectedLanguageKey = "aimhub.hasSelectedLanguage"
@@ -143,6 +144,9 @@ final class AppState: ObservableObject {
         NotificationManager.shared.configure()
         checkVersion()
         if activeKey != nil {
+            if UserDefaults.standard.double(forKey: sessionStartKey) == 0 {
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: sessionStartKey)
+            }
             checkBackgroundGap()
             startHeartbeat()
         }
@@ -159,14 +163,18 @@ final class AppState: ObservableObject {
         let info = try await server.activateKey(key: key, deviceID: deviceID)
         activeKey = info
         KeyStorage.save(info)
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastActiveKey)
+        let now = Date().timeIntervalSince1970
+        UserDefaults.standard.set(now, forKey: sessionStartKey)
+        UserDefaults.standard.set(now, forKey: lastActiveKey)
         log("Kích hoạt key thành công", level: .success)
+        startHeartbeat()
     }
 
     func clearKey() {
         activeKey = nil
         KeyStorage.clear()
         UserDefaults.standard.removeObject(forKey: lastActiveKey)
+        UserDefaults.standard.removeObject(forKey: sessionStartKey)
         stopHeartbeat()
         stopPingLoop()
     }
@@ -361,15 +369,7 @@ final class AppState: ObservableObject {
         do {
             let path = try ContainerAccess.shared.gameContainerPath(bundleID: game.bundleID)
             var isDir: ObjCBool = false
-            return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
-        } catch {
-            log("Check game \(game.bundleID) thất bại: \(error.localizedDescription)")
-            log("App phát hiện: \(AppLauncher.debugGameApps().joined(separator: ", "))")
-            return false
-        }
-    }
-
-    // MARK: - Session (auto logout khi rời app quá lâu)
+            return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.b    // MARK: - Session (tự động kết thúc phiên và thoát app đúng 60 phút)
 
     private func sessionDurationMinutes() -> Int {
         if let serverMin = versionInfo?.sessionDuration, serverMin > 0 {
@@ -378,8 +378,7 @@ final class AppState: ObservableObject {
         return 60 // 1 tieng tu dong thoat phien
     }
 
-    /// Gọi khi app vào lại foreground / khởi động. Đếm thời gian rời app,
-    /// không đếm thời gian user đang ở trong app.
+    /// Gọi khi app vào lại foreground / khởi động.
     func sceneDidBecomeActive() {
         guard activeKey != nil else { return }
         checkBackgroundGap()
@@ -399,10 +398,27 @@ final class AppState: ObservableObject {
         guard heartbeatTask == nil else { return }
         heartbeatTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                // Kiểm tra mỗi 10 giây để đảm bảo chính xác mốc 60 phút
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
                 guard let self = self, let currentKey = self.activeKey else { break }
+                
+                // 1. Kiểm tra đếm ngược thời gian phiên hoạt động (liên tục 60 phút từ lúc bắt đầu)
+                let startAt = UserDefaults.standard.double(forKey: self.sessionStartKey)
+                if startAt > 0 {
+                    let elapsed = Date().timeIntervalSince1970 - startAt
+                    let maxSeconds = Double(self.sessionDurationMinutes()) * 60.0
+                    if elapsed >= maxSeconds {
+                        await MainActor.run {
+                            self.log("Đã hết 60 phút phiên sử dụng. Đang dọn dẹp và tự động thoát ứng dụng...", level: .warning)
+                            self.expireSession(autoExit: true)
+                        }
+                        break
+                    }
+                }
+                
                 self.touchLastActive()
-                // Xác thực nhịp tim với máy chủ định kỳ (Session Heartbeat)
+                
+                // 2. Xác thực nhịp tim với máy chủ định kỳ
                 do {
                     let updated = try await self.server.activateKey(key: currentKey.key, deviceID: DeviceInfo.identifier)
                     await MainActor.run {
@@ -414,8 +430,9 @@ final class AppState: ObservableObject {
                         if msg.contains("hết hạn") || msg.contains("không tồn tại") || msg.contains("thu hồi") {
                             await MainActor.run {
                                 self.log("Key đã hết hạn hoặc bị thu hồi trên máy chủ: \(msg)", level: .error)
-                                self.expireSession()
+                                self.expireSession(autoExit: true)
                             }
+                            break
                         }
                     }
                 }
@@ -435,9 +452,21 @@ final class AppState: ObservableObject {
 
     private func checkBackgroundGap() {
         if let key = activeKey, key.isExpired {
-            expireSession()
+            expireSession(autoExit: true)
             return
         }
+        
+        let startAt = UserDefaults.standard.double(forKey: sessionStartKey)
+        if startAt > 0 {
+            let elapsed = Date().timeIntervalSince1970 - startAt
+            let maxSeconds = Double(sessionDurationMinutes()) * 60.0
+            if elapsed >= maxSeconds {
+                log("Đã hết 60 phút phiên sử dụng (\(Int(elapsed / 60)) phút). Đang dọn dẹp và tự động thoát ứng dụng.", level: .warning)
+                expireSession(autoExit: true)
+                return
+            }
+        }
+        
         let last = UserDefaults.standard.double(forKey: lastActiveKey)
         guard last > 0 else {
             touchLastActive()
@@ -445,14 +474,14 @@ final class AppState: ObservableObject {
         }
         let gone = Date().timeIntervalSince1970 - last
         if gone >= Double(sessionDurationMinutes()) * 60 {
-            log("ÄÃ£ rá»i app \(Int(gone / 60)) phÃºt (vÆ°á»£t quÃ¡ \(sessionDurationMinutes()) phÃºt). Tá»± Ä‘á»™ng káº¿t thÃºc phiÃªn.", level: .warning)
-            expireSession()
+            log("Đã rời app \(Int(gone / 60)) phút (vượt quá \(sessionDurationMinutes()) phút). Tự động kết thúc phiên.", level: .warning)
+            expireSession(autoExit: true)
             return
         }
         touchLastActive()
     }
 
-    private func expireSession() {
+    private func expireSession(autoExit: Bool = false) {
         log("Phiên hoạt động đã kết thúc hoặc key đã hết hạn")
         Task {
             await DNSAntiManager.shared.stopProtection()
@@ -469,7 +498,13 @@ final class AppState: ObservableObject {
         activeKey = nil
         KeyStorage.clear()
         UserDefaults.standard.removeObject(forKey: lastActiveKey)
+        UserDefaults.standard.removeObject(forKey: sessionStartKey)
         stopHeartbeat()
+        if autoExit {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                exit(0)
+            }
+        }
     }
 
     func log(_ message: String, level: LogLevel = .info) {
