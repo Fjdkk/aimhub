@@ -199,7 +199,7 @@ public final class ModManager {
         }
         // Kiểm tra quyền ghi thực tế vào thư mục Documents của container
         let docsPath = (path as NSString).appendingPathComponent("Documents")
-        _ = POSIXFile.createDirectories(docsPath)
+        try? POSIXFile.createDirectory(atPath: docsPath, withIntermediateDirectories: true)
         let testPath = (docsPath as NSString).appendingPathComponent(".aimhub_sandbox_test")
         let testFd = open(testPath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR)
         if testFd >= 0 {
@@ -293,7 +293,7 @@ public final class ModManager {
 
     public func installMod(_ mod: ModEntry, bundleID: String, mode: String = "replace") throws {
         _ = try prepareContainer(bundleID: bundleID)
-        var receipt = PatchTransactionManager.shared.beginTransaction(bundleID: bundleID)
+        let receipt = PatchTransactionManager.shared.beginTransaction(bundleID: bundleID)
         var modFiles: [String] = []
         var backupMap: [String: String] = [:]
         var injFiles: [String] = []
