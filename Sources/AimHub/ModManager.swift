@@ -197,13 +197,15 @@ public final class ModManager {
             ContainerAccess.diag("[Container] ❌ Path tìm được không phải thư mục: \(path)")
             throw ModManagerError.containerUnavailable
         }
-        // Kiểm tra quyền ghi thực tế vào container
-        let testPath = (path as NSString).appendingPathComponent(".aimhub_sandbox_test")
+        // Kiểm tra quyền ghi thực tế vào thư mục Documents của container
+        let docsPath = (path as NSString).appendingPathComponent("Documents")
+        _ = POSIXFile.createDirectories(docsPath)
+        let testPath = (docsPath as NSString).appendingPathComponent(".aimhub_sandbox_test")
         let testFd = open(testPath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR)
         if testFd >= 0 {
             close(testFd)
             unlink(testPath)
-            ContainerAccess.diag("[Container] ✅ Container OK + quyền ghi xác nhận: \(path)")
+            ContainerAccess.diag("[Container] ✅ Container OK + quyền ghi xác nhận: \(docsPath)")
         } else {
             let errNo = errno
             let errMsg = String(cString: strerror(errNo)!)

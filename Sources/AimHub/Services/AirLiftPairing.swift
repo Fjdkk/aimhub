@@ -5,6 +5,58 @@ import UIKit
 import UserNotifications
 import AVFoundation
 
+// MARK: - C FFI Bindings for Rust `stikpair_ffi` (Apple SRP RemotePairing Core)
+
+public struct StikPairResult {
+    public var error: UnsafeMutablePointer<CChar>?
+    public var device_name: UnsafeMutablePointer<CChar>?
+    public var device_model: UnsafeMutablePointer<CChar>?
+    public var device_udid: UnsafeMutablePointer<CChar>?
+    public var pairing_file_path: UnsafeMutablePointer<CChar>?
+    public var host_alt_irk_hex: UnsafeMutablePointer<CChar>?
+    
+    public init() {
+        self.error = nil
+        self.device_name = nil
+        self.device_model = nil
+        self.device_udid = nil
+        self.pairing_file_path = nil
+        self.host_alt_irk_hex = nil
+    }
+}
+
+public typealias StikPairReadyCb = @convention(c) (
+    UnsafeMutableRawPointer?,
+    UnsafePointer<CChar>?,
+    UInt16,
+    UnsafePointer<UnsafePointer<CChar>?>?,
+    UnsafePointer<UnsafePointer<CChar>?>?,
+    Int
+) -> Void
+
+public typealias StikPairPinCb = @convention(c) (
+    UnsafePointer<CChar>?,
+    UnsafeMutableRawPointer?
+) -> Void
+
+@_silgen_name("stikpair_run_host")
+public func stikpair_run_host(
+    _ bind_addr: UnsafePointer<CChar>?,
+    _ port: UInt16,
+    _ name: UnsafePointer<CChar>?,
+    _ model: UnsafePointer<CChar>?,
+    _ out_path: UnsafePointer<CChar>?,
+    _ ready_cb: StikPairReadyCb?,
+    _ pin_cb: StikPairPinCb?,
+    _ ctx: UnsafeMutableRawPointer?,
+    _ out: UnsafeMutablePointer<StikPairResult>?
+) -> Int32
+
+@_silgen_name("stikpair_result_free")
+public func stikpair_result_free(_ r: UnsafeMutablePointer<StikPairResult>?)
+
+// MARK: - AirLift Pairing Record & Storage
+
 public struct AirLiftPairingRecord: Codable {
     public let udid: String
     public let systemBUID: String
@@ -47,7 +99,16 @@ public final class AirLiftPairingStore {
     private init() {}
     
     public var isPaired: Bool {
-        return loadPairingRecord() != nil || loadStructuredRecord() != nil
+        return loadPairingRecord() != nil || loadStructuredRecord() != nil || hasPairingFileOnDisk
+    }
+    
+    public var hasPairingFileOnDisk: Bool {
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return false }
+        let plistFile = docs.appendingPathComponent("rp_pairing_file.plist")
+        let recordsDir = docs.appendingPathComponent("PairingRecords")
+        let hasDir = (try? fm.contentsOfDirectory(atPath: recordsDir.path))?.contains(where: { $0.hasSuffix(".mobiledevicepairing") }) ?? false
+        return fm.fileExists(atPath: plistFile.path) || hasDir
     }
     
     public var pairedDate: Date? {
@@ -70,8 +131,6 @@ public final class AirLiftPairingStore {
             UserDefaults.standard.set(record.pairedAt, forKey: pairedDateKey)
             UserDefaults.standard.set(record.pin, forKey: lastPinKey)
             savePairingRecord(encoded)
-            
-            // Lưu file .mobiledevicepairing vào Documents/PairingRecords
             savePairingFileToDisk(record)
         }
     }
@@ -95,10 +154,12 @@ public final class AirLiftPairingStore {
         if let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first {
             let recordsDir = docs.appendingPathComponent("PairingRecords")
             try? fm.removeItem(at: recordsDir)
+            let plistFile = docs.appendingPathComponent("rp_pairing_file.plist")
+            try? fm.removeItem(at: plistFile)
         }
     }
     
-    private func savePairingFileToDisk(_ record: AirLiftPairingRecord) {
+    public func savePairingFileToDisk(_ record: AirLiftPairingRecord) {
         let fm = FileManager.default
         guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let recordsDir = docs.appendingPathComponent("PairingRecords")
@@ -123,6 +184,8 @@ public final class AirLiftPairingStore {
     }
 }
 
+// MARK: - AirLift State
+
 public enum AirLiftPairingState: Equatable {
     case idle
     case pairing(step: Int, total: Int, message: String)
@@ -131,7 +194,8 @@ public enum AirLiftPairingState: Equatable {
     case failed(String)
 }
 
-// Background Audio Engine keep-alive (theo cơ chế DeltaProxy & 3105)
+// MARK: - KeepAlive Audio Engine
+
 public final class AirLiftPairingKeepAlive {
     public static let shared = AirLiftPairingKeepAlive()
     
@@ -159,35 +223,35 @@ public final class AirLiftPairingKeepAlive {
             let frameCount = AVAudioFrameCount(format.sampleRate * 2.0)
             if let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) {
                 buffer.frameLength = frameCount
-                if let channelData = buffer.floatChannelData {
-                    memset(channelData[0], 0, Int(frameCount) * MemoryLayout<Float>.size)
-                }
+                let channelData = buffer.floatChannelData?[0]
+                channelData?.initialize(repeating: 0.0, count: Int(frameCount))
                 
-                try audioEngine.start()
-                audioPlayer.play()
-                audioPlayer.scheduleBuffer(buffer, at: nil, options: [.loops], completionHandler: nil)
+                audioPlayer.scheduleBuffer(buffer, at: nil, options: .loops, completionHandler: nil)
             }
+            
+            try audioEngine.start()
+            audioPlayer.play()
             
             self.engine = audioEngine
             self.player = audioPlayer
             self.isRunning = true
             ContainerAccess.diag("[AirLift] KeepAlive background audio engine started.")
         } catch {
-            ContainerAccess.diag("[AirLift] KeepAlive start error: \(error.localizedDescription)")
+            ContainerAccess.diag("[AirLift] KeepAlive audio error: \(error.localizedDescription)")
         }
     }
     
     public func stop() {
-        guard isRunning else { return }
         player?.stop()
         engine?.stop()
         player = nil
         engine = nil
         isRunning = false
-        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
-        ContainerAccess.diag("[AirLift] KeepAlive background audio engine stopped.")
+        try? AVAudioSession.sharedInstance().setActive(false)
     }
 }
+
+// MARK: - AirLift Pairing Controller
 
 public final class AirLiftPairingController: NSObject, ObservableObject, NetServiceDelegate {
     public static let shared = AirLiftPairingController()
@@ -199,12 +263,10 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     @Published public var currentPin: String = ""
     
     private var pathMonitor: NWPathMonitor?
-    private var netServicePairable: NetService?
-    private var netServiceRemote: NetService?
-    private var tcpListener: NWListener?
+    private var netService: NetService?
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private let monitorQueue = DispatchQueue(label: "aimhub.airlift.network_monitor")
-    public let pairingPort: UInt16 = 58783
+    private var isPairingInProgress = false
     
     private override init() {
         super.init()
@@ -243,7 +305,10 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     }
     
     public func startPairing() {
-        // 1. Kích hoạt giữ nền (KeepAlive + Background Task)
+        guard !isPairingInProgress else { return }
+        isPairingInProgress = true
+        
+        // 1. Kích hoạt giữ nền
         AirLiftPairingKeepAlive.shared.start()
         
         if bgTask != .invalid {
@@ -258,245 +323,168 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             }
         }
         
-        // 2. Tạo hoặc giữ mã PIN 6 số ổn định
-        let generatedPin = String(format: "%06d", arc4random_uniform(1000000))
-        self.currentPin = generatedPin
-        AirLiftPairingStore.shared.lastPin = generatedPin
-        self.state = .pinRequired(pin: generatedPin)
+        self.state = .pairing(step: 1, total: 2, message: "Đang khởi động engine Apple RemotePairing (StikPair/idevice)...")
         
-        // 3. Gửi thông báo cục bộ để người dùng có thể thấy mã ngay cả khi sang Settings
-        postPINNotification(pin: generatedPin)
-        
-        // 4. Kích hoạt thăm dò Mạng Cục Bộ
+        // 2. Kích hoạt thăm dò Mạng Cục Bộ
         triggerLocalNetworkPrompt()
         
-        // 5. Khởi động TCP Socket Listener trên cổng 58783
-        startTCPListener(port: pairingPort)
+        // 3. Khởi chạy Rust FFI Server trên Background Thread
+        let outPath = Self.pairingFilePath()
+        let bindAddr = "0.0.0.0"
+        let hostName = "AimHub"
+        let hostModel = "Mac17,7"
+        let ctxBits = UInt(bitPattern: Unmanaged.passRetained(self).toOpaque())
         
-        // 6. Phát sóng song song 2 dịch vụ Bonjour chuẩn Apple Developer Mode (như DeltaProxy)
-        startAdvertisingBonjour(port: pairingPort)
-        
-        ContainerAccess.diag("[AirLift] Pairing started. PIN=\(generatedPin), Port=\(pairingPort)")
-    }
-    
-    private func startTCPListener(port: UInt16) {
-        tcpListener?.cancel()
-        
-        do {
-            guard let nwPort = NWEndpoint.Port(rawValue: port) else { return }
-            let params = NWParameters.tcp
-            params.allowLocalEndpointReuse = true
-            params.includePeerToPeer = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let ctx = UnsafeMutableRawPointer(bitPattern: ctxBits)
+            var result = StikPairResult()
             
-            let listener = try NWListener(using: params, on: nwPort)
+            ContainerAccess.diag("[AirLift] Starting stikpair_run_host on \(bindAddr)...")
             
-            listener.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    ContainerAccess.diag("[AirLift] TCP Listener ready on port \(port).")
-                case .failed(let error):
-                    ContainerAccess.diag("[AirLift] TCP Listener failed: \(error.localizedDescription)")
-                default:
-                    break
+            let rc = bindAddr.withCString { bindC in
+                hostName.withCString { nameC in
+                    hostModel.withCString { modelC in
+                        outPath.withCString { outC in
+                            stikpair_run_host(
+                                bindC,
+                                0, // Dynamic port
+                                nameC,
+                                modelC,
+                                outC,
+                                stikPairReadyCallback,
+                                stikPairPinCallback,
+                                ctx,
+                                &result
+                            )
+                        }
+                    }
                 }
             }
             
-            listener.newConnectionHandler = { [weak self] connection in
-                ContainerAccess.diag("[AirLift] Received incoming pairing connection from Developer Mode.")
-                connection.start(queue: .global())
-                self?.handlePairingConnection(connection)
+            let outcome: AirLiftPairingState
+            let deviceUDID = cString(result.device_udid)
+            let deviceName = cString(result.device_name)
+            let pairingPath = cString(result.pairing_file_path)
+            let errMsg = cString(result.error)
+            
+            if rc == 0 {
+                let actualUDID = deviceUDID.isEmpty ? (UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString) : deviceUDID
+                let record = AirLiftPairingRecord(
+                    udid: actualUDID,
+                    systemBUID: UUID().uuidString,
+                    hostID: "AimHub-Host-\(actualUDID.prefix(8))",
+                    pairedAt: Date(),
+                    pin: self.currentPin
+                )
+                AirLiftPairingStore.shared.saveStructuredRecord(record)
+                
+                // Đọc file plist tạo bởi Rust nếu có
+                if let data = try? Data(contentsOf: URL(fileURLWithPath: pairingPath)) {
+                    AirLiftPairingStore.shared.savePairingRecord(data)
+                }
+                
+                outcome = .success
+                ContainerAccess.diag("[AirLift] ✅ Ghép đôi thành công! Thiết bị: \(deviceName) (\(actualUDID))")
+            } else {
+                let message = errMsg.isEmpty ? "Ghép đôi thất bại (mã \(rc)). Vui lòng thử lại." : errMsg
+                outcome = .failed(message)
+                ContainerAccess.diag("[AirLift] ❌ Ghép đôi thất bại: \(message)")
             }
             
-            listener.start(queue: .global())
-            self.tcpListener = listener
-        } catch {
-            ContainerAccess.diag("[AirLift] Could not bind TCP listener on port \(port): \(error.localizedDescription)")
-        }
-    }
-    
-    private func handlePairingConnection(_ connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] content, context, isComplete, error in
-            guard let self = self else { return }
-            
-            let deviceUDID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-            let systemBUID = UUID().uuidString
-            
-            // Tạo chứng chỉ & khóa giả lập chuẩn Apple X.509
-            var hostKey = Data(count: 32)
-            _ = hostKey.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
-            
-            var devCert = Data(count: 64)
-            _ = devCert.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 64, $0.baseAddress!) }
-            
-            let record = AirLiftPairingRecord(
-                udid: deviceUDID,
-                systemBUID: systemBUID,
-                hostID: "AimHub-Host-\(deviceUDID.prefix(8))",
-                pairedAt: Date(),
-                pin: self.currentPin,
-                rootCertificate: devCert,
-                deviceCertificate: devCert,
-                hostPrivateKey: hostKey
-            )
-            
-            AirLiftPairingStore.shared.saveStructuredRecord(record)
+            stikpair_result_free(&result)
+            if let ctx = ctx {
+                Unmanaged<AirLiftPairingController>.fromOpaque(ctx).release()
+            }
             
             DispatchQueue.main.async {
-                self.state = .success
-                self.isTunnelActive = self.isVPNActive
-                ContainerAccess.diag("[AirLift] Pairing handshake accepted. Generated pairing record for UDID: \(deviceUDID)")
-                
-                let content = UNMutableNotificationContent()
-                content.title = "AirLift Ghép Đôi Thành Công"
-                content.body = "Thiết bị [\(deviceUDID.prefix(8))] đã ghép đôi với AimHub. Đã tạo file .mobiledevicepairing."
-                content.sound = .default
-                let request = UNNotificationRequest(identifier: "aimhub.airlift.success", content: content, trigger: nil)
-                UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+                self.stopAdvertising()
+                self.isPairingInProgress = false
+                self.state = outcome
+                if case .success = outcome {
+                    self.isTunnelActive = self.isVPNActive
+                    self.postSuccessNotification(udid: deviceUDID)
+                }
+                if let task = self.bgTask as UIBackgroundTaskIdentifier?, task != .invalid {
+                    UIApplication.shared.endBackgroundTask(task)
+                    self.bgTask = .invalid
+                }
             }
         }
     }
     
-    private func startAdvertisingBonjour(port: UInt16) {
-        netServicePairable?.stop()
-        netServiceRemote?.stop()
-        
-        // Tên dịch vụ chuẩn không dấu cách để tránh lỗi phân giải RFC 6763 trên Apple remotepairingd
-        let appName = "AimHub"
-        
-        // Chuẩn bị TXT Record Dictionary đầy đủ chuẩn Apple RemotePairing & DeltaProxy
-        var txtDict: [String: Data] = [:]
-        txtDict["model"] = "Mac17,7".data(using: .utf8)
-        txtDict["ver"] = "1".data(using: .utf8)
-        txtDict["minVer"] = "17".data(using: .utf8)
-        txtDict["flags"] = "1".data(using: .utf8)
-        txtDict["accountID"] = appName.data(using: .utf8)
-        txtDict["remotepairing_serial_number"] = "AAAAAAAAAAAA".data(using: .utf8)
-        txtDict["remotepairing_udid"] = UUID().uuidString.data(using: .utf8)
-        
-        var irk = Data(count: 16)
-        _ = irk.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
-        txtDict["airliftDeviceIRK"] = irk
-        txtDict["altIRK"] = irk
-        
-        let txtData = NetService.data(fromTXTRecord: txtDict)
-        
-        // 1. Service chính: _remotepairing-pairable-host._tcp.
-        let s1 = NetService(domain: "", type: "_remotepairing-pairable-host._tcp.", name: appName, port: Int32(port))
-        s1.delegate = self
-        s1.includesPeerToPeer = true
-        s1.setTXTRecord(txtData)
-        s1.schedule(in: .main, forMode: .common)
-        s1.publish(options: [])
-        self.netServicePairable = s1
-        
-        // 2. Service phụ: _remotepairing._tcp. (hỗ trợ các phiên bản iOS khác)
-        let s2 = NetService(domain: "", type: "_remotepairing._tcp.", name: appName, port: Int32(port))
-        s2.delegate = self
-        s2.includesPeerToPeer = true
-        s2.setTXTRecord(txtData)
-        s2.schedule(in: .main, forMode: .common)
-        s2.publish(options: [])
-        self.netServiceRemote = s2
-        
-        ContainerAccess.diag("[AirLift] Published Bonjour services with includesPeerToPeer=true: _remotepairing-pairable-host._tcp. & _remotepairing._tcp. on port \(port)")
-    }
-    
-    // NetServiceDelegate
-    public func netServiceDidPublish(_ sender: NetService) {
-        ContainerAccess.diag("[AirLift] Bonjour published successfully: \(sender.name) [\(sender.type)]")
-    }
-    
-    public func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
-        ContainerAccess.diag("[AirLift] Bonjour publish failed [\(sender.type)]: \(errorDict)")
-    }
-    
-    public func triggerLocalNetworkPrompt() {
-        AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
-    }
-}
-
-public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegate, NetServiceBrowserDelegate {
-    public static let shared = AirLiftLocalNetworkAuthorization()
-    
-    private var probeService: NetService?
-    private var browser: NetServiceBrowser?
-    private var nwBrowser: NWBrowser?
-    private var udpProbe: NWConnection?
-    private var hasRequested = false
-    
-    private override init() {
-        super.init()
-    }
-    
-    public func requestAuthorization() {
-        guard !hasRequested else { return }
-        hasRequested = true
-        
-        ContainerAccess.diag("[AirLift] Triggering Local Network Privacy Dialog (3105 standard)...")
-        
-        // 1. Tạo probe NetService trên domain local.
-        let service = NetService(domain: "local.", type: "_3105airlift._tcp.", name: "3105AirLiftProbe", port: 58784)
+    fileprivate func startAdvertising(serviceID: String, port: Int32, txt: [String: Data]) {
+        stopAdvertising()
+        let service = NetService(
+            domain: "",
+            type: "_remotepairing-pairable-host._tcp.",
+            name: serviceID,
+            port: port
+        )
         service.delegate = self
         service.includesPeerToPeer = true
+        service.setTXTRecord(NetService.data(fromTXTRecord: txt))
         service.schedule(in: .main, forMode: .common)
-        service.publish()
-        self.probeService = service
-        
-        // 2. Dùng NetServiceBrowser quét chính _3105airlift._tcp. trên main runloop để ép iOS 18 mở bảng radar
-        let b = NetServiceBrowser()
-        b.delegate = self
-        b.includesPeerToPeer = true
-        b.schedule(in: .main, forMode: .common)
-        b.searchForServices(ofType: "_3105airlift._tcp.", inDomain: "local.")
-        self.browser = b
-        
-        // 3. NWBrowser với includePeerToPeer = true trên main queue
-        let params = NWParameters()
-        params.includePeerToPeer = true
-        let nwb = NWBrowser(for: .bonjour(type: "_3105airlift._tcp", domain: "local"), using: params)
-        nwb.stateUpdateHandler = { state in
-            ContainerAccess.diag("[AirLift] Local Network NWBrowser state: \(state)")
-        }
-        nwb.start(queue: .main)
-        self.nwBrowser = nwb
-        
-        // 4. Gửi UDP multicast probe tới 224.0.0.251:5353 để ép iOS kích hoạt hộp thoại Mạng Cục Bộ
-        let udpParams = NWParameters.udp
-        udpParams.includePeerToPeer = true
-        let host = NWEndpoint.Host("224.0.0.251")
-        let port = NWEndpoint.Port(rawValue: 5353)!
-        let conn = NWConnection(host: host, port: port, using: udpParams)
-        conn.stateUpdateHandler = { state in
-            if case .ready = state {
-                let probeData = "AIMHUB_LOCAL_PROBE".data(using: .utf8)
-                conn.send(content: probeData, completion: .contentProcessed({ _ in
-                    conn.cancel()
-                }))
-            }
-        }
-        conn.start(queue: .global())
-        self.udpProbe = conn
+        service.publish(options: [])
+        self.netService = service
+        ContainerAccess.diag("[AirLift] 📡 Published Bonjour: \(serviceID) on port \(port) with \(txt.count) TXT keys.")
     }
-}
-
-extension AirLiftPairingController {
+    
+    fileprivate func stopAdvertising() {
+        netService?.stop()
+        netService = nil
+    }
+    
+    fileprivate func presentPin(_ pin: String) {
+        self.currentPin = pin
+        AirLiftPairingStore.shared.lastPin = pin
+        self.state = .pinRequired(pin: pin)
+        ContainerAccess.diag("[AirLift] 🔑 Engine Apple SRP generated PIN: \(pin)")
+        postPINNotification(pin: pin)
+    }
     
     public func postPINNotification(pin: String) {
         let content = UNMutableNotificationContent()
         content.title = "Mã Ghép Đôi AirLift: \(pin)"
-        content.body = "Nhập mã \(pin) vào: Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Ghép đôi thiết bị."
+        content.body = "Nhập mã \(pin) trên màn hình iPhone: Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Ghép đôi."
         content.sound = .default
         
         let request = UNNotificationRequest(identifier: "aimhub.airlift.pin", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
     
-    public func importPairingData(_ data: Data) -> Bool {
-        guard !data.isEmpty else { return false }
-        AirLiftPairingStore.shared.savePairingRecord(data)
-        state = .success
-        ContainerAccess.diag("[AirLift] Imported external pairing record successfully (\(data.count) bytes).")
-        return true
+    private func postSuccessNotification(udid: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "AirLift Ghép Đôi Thành Công 🎉"
+        content.body = "Đã xác thực chứng chỉ Apple RemotePairing và lưu file pairing vào hệ thống."
+        content.sound = .default
+        
+        let request = UNNotificationRequest(identifier: "aimhub.airlift.success", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+    
+    public static func pairingFilePath() -> String {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return docs.appendingPathComponent("rp_pairing_file.plist").path
+    }
+    
+    public func triggerLocalNetworkPrompt() {
+        AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
+    }
+    
+    public func resetPairing() {
+        AirLiftPairingStore.shared.clearPairing()
+        AirLiftPairingKeepAlive.shared.stop()
+        stopAdvertising()
+        isPairingInProgress = false
+        if bgTask != .invalid {
+            UIApplication.shared.endBackgroundTask(bgTask)
+            bgTask = .invalid
+        }
+        state = .idle
+        currentPin = ""
+        isTunnelActive = false
+        ContainerAccess.diag("[AirLift] Đã xóa toàn bộ cấu hình ghép đôi và dừng dịch vụ.")
     }
     
     public func testTunnelConnection(completion: @escaping (Bool, String) -> Void) {
@@ -525,21 +513,107 @@ extension AirLiftPairingController {
         }
     }
     
-    public func resetPairing() {
-        AirLiftPairingStore.shared.clearPairing()
-        AirLiftPairingKeepAlive.shared.stop()
-        netServicePairable?.stop()
-        netServicePairable = nil
-        netServiceRemote?.stop()
-        netServiceRemote = nil
-        tcpListener?.cancel()
-        tcpListener = nil
-        if bgTask != .invalid {
-            UIApplication.shared.endBackgroundTask(bgTask)
-            bgTask = .invalid
+    public func importPairingData(_ data: Data) -> Bool {
+        guard !data.isEmpty else { return false }
+        AirLiftPairingStore.shared.savePairingRecord(data)
+        state = .success
+        ContainerAccess.diag("[AirLift] Imported external pairing record successfully (\(data.count) bytes).")
+        return true
+    }
+    
+    // NetServiceDelegate
+    public func netServiceDidPublish(_ sender: NetService) {
+        ContainerAccess.diag("[AirLift] Bonjour published successfully: \(sender.name) [\(sender.type)]")
+    }
+    
+    public func netService(_ sender: NetService, didNotPublish errorDict: [String : NSNumber]) {
+        ContainerAccess.diag("[AirLift] Bonjour publish failed [\(sender.type)]: \(errorDict)")
+    }
+}
+
+// MARK: - C Callback Trampolines
+
+private let stikPairReadyCallback: StikPairReadyCb = { ctx, serviceID, port, keys, vals, count in
+    guard let ctx = ctx, let serviceID = serviceID else { return }
+    let controller = Unmanaged<AirLiftPairingController>.fromOpaque(ctx).takeUnretainedValue()
+    let id = String(cString: serviceID)
+    
+    var txt: [String: Data] = [:]
+    if let keys = keys, let vals = vals {
+        for i in 0..<count {
+            guard let k = keys[i], let v = vals[i] else { continue }
+            txt[String(cString: k)] = Data(String(cString: v).utf8)
         }
-        currentPin = ""
-        isTunnelActive = false
-        state = .idle
+    }
+    
+    DispatchQueue.main.async {
+        controller.startAdvertising(serviceID: id, port: Int32(port), txt: txt)
+    }
+}
+
+private let stikPairPinCallback: StikPairPinCb = { pin, ctx in
+    guard let ctx = ctx, let pin = pin else { return }
+    let controller = Unmanaged<AirLiftPairingController>.fromOpaque(ctx).takeUnretainedValue()
+    let pinStr = String(cString: pin)
+    DispatchQueue.main.async {
+        controller.presentPin(pinStr)
+    }
+}
+
+private func cString(_ ptr: UnsafeMutablePointer<CChar>?) -> String {
+    guard let ptr = ptr else { return "" }
+    return String(cString: ptr)
+}
+
+// MARK: - Local Network Authorization Helper (StikPair Probe Standard)
+
+public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegate, NetServiceBrowserDelegate {
+    public static let shared = AirLiftLocalNetworkAuthorization()
+    
+    private var browser: NWBrowser?
+    private var listener: NWListener?
+    private var hasRequested = false
+    private let probeType = "_stikpairprobe._tcp"
+    
+    private override init() {
+        super.init()
+    }
+    
+    public func requestAuthorization() {
+        guard !hasRequested else { return }
+        hasRequested = true
+        
+        let params = NWParameters.tcp
+        params.includePeerToPeer = true
+        
+        let l = try? NWListener(using: params)
+        l?.service = NWListener.Service(name: "AimHubProbe", type: probeType)
+        l?.newConnectionHandler = { $0.cancel() }
+        self.listener = l
+        
+        let b = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
+        b.stateUpdateHandler = { state in
+            ContainerAccess.diag("[AirLift] Local Network NWBrowser state: \(state)")
+        }
+        b.browseResultsChangedHandler = { [weak self] results, _ in
+            if !results.isEmpty {
+                self?.cleanup()
+            }
+        }
+        self.browser = b
+        
+        l?.start(queue: .main)
+        b.start(queue: .main)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+            self?.cleanup()
+        }
+    }
+    
+    private func cleanup() {
+        browser?.cancel()
+        browser = nil
+        listener?.cancel()
+        listener = nil
     }
 }

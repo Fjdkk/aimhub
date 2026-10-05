@@ -12,9 +12,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Rust target for iOS
+        run: |
+          set -eo pipefail
+          rustup target add aarch64-apple-ios
+
+      - name: Build Rust FFI Core (Apple RemotePairing engine)
+        run: |
+          set -eo pipefail
+          cd Rust
+          cargo build --release --target aarch64-apple-ios
+          ls -la target/aarch64-apple-ios/release/libstikpair_ffi.a
+          cd ..
+
       - name: Build app (no signing)
         run: |
           set -eo pipefail
+          RUST_LIB_DIR="$(pwd)/Rust/target/aarch64-apple-ios/release"
           xcodebuild \
             -project AimHub.xcodeproj \
             -target AimHub \
@@ -24,6 +38,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
+            OTHER_LDFLAGS="\$(inherited) -L${RUST_LIB_DIR} -lstikpair_ffi -framework Security -framework SystemConfiguration -framework Network" \
+            LIBRARY_SEARCH_PATHS="\$(inherited) ${RUST_LIB_DIR}" \
             build | xcbeautify || xcodebuild \
             -project AimHub.xcodeproj \
             -target AimHub \
@@ -33,6 +49,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
+            OTHER_LDFLAGS="\$(inherited) -L${RUST_LIB_DIR} -lstikpair_ffi -framework Security -framework SystemConfiguration -framework Network" \
+            LIBRARY_SEARCH_PATHS="\$(inherited) ${RUST_LIB_DIR}" \
             build
 
       - name: Package IPA
