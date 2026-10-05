@@ -104,9 +104,7 @@ struct ModListView: View {
                         .padding(.top, 40)
                 } else {
                     let availableTabs = tabs.filter {
-                        $0.id != "all" &&
-                        $0.id != "tab_menu_aimhub" &&
-                        !$0.name.lowercased().contains("menu aimhub")
+                        $0.id != "all"
                     }
                     ForEach(availableTabs) { tab in
                         categoryRow(tab)
@@ -325,10 +323,6 @@ struct ModListView: View {
 
                 if let serverTabs = detail.tabs, !serverTabs.isEmpty {
                     for st in serverTabs {
-                        let low = (st.id + " " + st.name).lowercased()
-                        if low.contains("menu aimhub") {
-                            continue
-                        }
                         if st.visible != false {
                             extractedTabs.append(TabItem(
                                 id: st.id,
@@ -344,10 +338,6 @@ struct ModListView: View {
                     for r in filtered {
                         let tid = r.tabID ?? "tab_aim"
                         let tname = r.tabName ?? "List Aim"
-                        let low = (tid + " " + tname).lowercased()
-                        if low.contains("menu aimhub") {
-                            continue
-                        }
                         if r.tabVisible != false && !seenIDs.contains(tid) {
                             seenIDs.insert(tid)
                             extractedTabs.append(TabItem(
@@ -367,7 +357,8 @@ struct ModListView: View {
                         TabItem(id: "tab_aim", name: "List Aim", icon: "crosshair", order: 1),
                         TabItem(id: "tab_locator", name: "Định Vị + Xuyên tường", icon: "eye.fill", order: 2),
                         TabItem(id: "tab_esp_aim", name: "ESP + AIMBOT", icon: "viewfinder", order: 3),
-                        TabItem(id: "tab_skin", name: "Skin Mod", icon: "tshirt.fill", order: 4)
+                        TabItem(id: "tab_skin", name: "Skin Mod", icon: "tshirt.fill", order: 4),
+                        TabItem(id: "tab_menu_aimhub", name: "Menu AimHub", icon: "bolt.shield.fill", order: 5)
                     ]
                 }
 
@@ -379,17 +370,7 @@ struct ModListView: View {
     }
 
     private func filter(_ list: [RuleDetail], allowed: [String]?) -> [RuleDetail] {
-        let cleanList = list.filter { rule in
-            let slot = (rule.slot ?? "").lowercased()
-            let tid = (rule.tabID ?? "").lowercased()
-            let rID = rule.ruleID.lowercased()
-            let name = rule.name.lowercased()
-
-            if slot == "menu_aimhub" || rID.contains("aimhub") || tid.contains("aimhub") || name.contains("menu aimhub") {
-                return false
-            }
-            return true
-        }
+        let cleanList = list
         guard let allowed = allowed, !allowed.isEmpty else { return cleanList }
         let currentBundle = game.bundleID.lowercased()
         let hasBundlePrefixed = allowed.contains(where: { $0.contains(":") })
