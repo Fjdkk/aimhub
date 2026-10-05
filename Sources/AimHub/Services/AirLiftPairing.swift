@@ -59,6 +59,7 @@ public func stikpair_result_free(_ r: UnsafeMutablePointer<StikPairResult>?)
 
 public struct AirLiftPairingRecord: Codable {
     public let udid: String
+    public let deviceName: String?
     public let systemBUID: String
     public let hostID: String
     public let pairedAt: Date
@@ -69,6 +70,7 @@ public struct AirLiftPairingRecord: Codable {
     
     public init(
         udid: String,
+        deviceName: String? = nil,
         systemBUID: String,
         hostID: String,
         pairedAt: Date = Date(),
@@ -78,6 +80,7 @@ public struct AirLiftPairingRecord: Codable {
         hostPrivateKey: Data? = nil
     ) {
         self.udid = udid
+        self.deviceName = deviceName
         self.systemBUID = systemBUID
         self.hostID = hostID
         self.pairedAt = pairedAt
@@ -369,9 +372,11 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             let errMsg = cString(result.error)
             
             if rc == 0 {
+                let actualName = deviceName.isEmpty ? UIDevice.current.name : deviceName
                 let actualUDID = deviceUDID.isEmpty ? (UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString) : deviceUDID
                 let record = AirLiftPairingRecord(
                     udid: actualUDID,
+                    deviceName: actualName,
                     systemBUID: UUID().uuidString,
                     hostID: "AimHub-Host-\(actualUDID.prefix(8))",
                     pairedAt: Date(),
@@ -385,7 +390,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
                 }
                 
                 outcome = .success
-                ContainerAccess.diag("[AirLift] ✅ Ghép đôi thành công! Thiết bị: \(deviceName) (\(actualUDID))")
+                ContainerAccess.diag("[AirLift] ✅ Ghép đôi thành công! Thiết bị: \(actualName) (\(actualUDID))")
             } else {
                 let message = errMsg.isEmpty ? "Ghép đôi thất bại (mã \(rc)). Vui lòng thử lại." : errMsg
                 outcome = .failed(message)
@@ -402,8 +407,9 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
                 self.isPairingInProgress = false
                 self.state = outcome
                 if case .success = outcome {
+                    let actualName = deviceName.isEmpty ? UIDevice.current.name : deviceName
                     self.isTunnelActive = self.isVPNActive
-                    self.postSuccessNotification(udid: deviceUDID)
+                    self.postSuccessNotification(deviceName: actualName, udid: deviceUDID)
                 }
                 if let task = self.bgTask as UIBackgroundTaskIdentifier?, task != .invalid {
                     UIApplication.shared.endBackgroundTask(task)
@@ -445,18 +451,18 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     
     public func postPINNotification(pin: String) {
         let content = UNMutableNotificationContent()
-        content.title = "Mã Ghép Đôi AirLift: \(pin)"
-        content.body = "Nhập mã \(pin) trên màn hình iPhone: Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Ghép đôi."
+        content.title = "AimHub Cheat"
+        content.body = "Mã ghép đôi AimHub: \(pin)\nNhập mã này trên màn hình Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Ghép đôi."
         content.sound = .default
         
         let request = UNNotificationRequest(identifier: "aimhub.airlift.pin", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
     
-    private func postSuccessNotification(udid: String) {
+    private func postSuccessNotification(deviceName: String, udid: String) {
         let content = UNMutableNotificationContent()
-        content.title = "AirLift Ghép Đôi Thành Công 🎉"
-        content.body = "Đã xác thực chứng chỉ Apple RemotePairing và lưu file pairing vào hệ thống."
+        content.title = "AimHub Cheat"
+        content.body = "Ghép đôi thành công! (\(deviceName))"
         content.sound = .default
         
         let request = UNNotificationRequest(identifier: "aimhub.airlift.success", content: content, trigger: nil)

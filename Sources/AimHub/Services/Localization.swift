@@ -193,6 +193,7 @@ public enum L10n {
             .english: "Check if the local tunnel is active and ready for container access."
         ],
         "airlift.testTunnel": [.vietnamese: "Kiểm Tra Kết Nối", .english: "Test Connection"],
+        "airlift.unpair": [.vietnamese: "Hủy Ghép Đôi Thiết Bị", .english: "Unpair Device"],
         "airlift.close": [.vietnamese: "Đóng", .english: "Close"],
         "airlift.notice": [.vietnamese: "Thông Báo", .english: "Notice"]
     ]

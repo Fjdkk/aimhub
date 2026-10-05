@@ -163,7 +163,7 @@ struct ModListView: View {
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(Theme.text)
 
-                        if let note = tab.note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if let note = sanitizeTabNote(tab.note) {
                             Text("• \(note)")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(Theme.green)
@@ -204,7 +204,7 @@ struct ModListView: View {
     private var modListView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if let note = selectedTab?.note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if let note = sanitizeTabNote(selectedTab?.note) {
                     HStack(spacing: 6) {
                         Image(systemName: "info.circle.fill")
                             .font(.system(size: 12))
@@ -291,6 +291,15 @@ struct ModListView: View {
         }
     }
 
+    private func sanitizeTabNote(_ note: String?) -> String? {
+        guard let n = note?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty else { return nil }
+        let low = n.lowercased()
+        if low.contains("vào game") || low.contains("vao game") || low.contains("game trước") || low.contains("game truoc") || low.contains("trước nhé") || low.contains("truoc nhe") {
+            return nil
+        }
+        return n
+    }
+
     private func iconForTab(name: String, id: String) -> String {
         let low = (name + " " + id).lowercased()
         if low.contains("menu") || low.contains("aimhub") { return "bolt.shield.fill" }
@@ -326,7 +335,7 @@ struct ModListView: View {
                                 name: st.name,
                                 icon: iconForTab(name: st.name, id: st.id),
                                 order: st.order ?? 99,
-                                note: st.note
+                                note: sanitizeTabNote(st.note)
                             ))
                         }
                     }
@@ -346,7 +355,7 @@ struct ModListView: View {
                                 name: tname,
                                 icon: iconForTab(name: tname, id: tid),
                                 order: r.tabOrder ?? 99,
-                                note: r.tabNote
+                                note: sanitizeTabNote(r.tabNote)
                             ))
                         }
                     }
@@ -448,32 +457,6 @@ struct ModListView: View {
             }
 
             Spacer()
-
-            Button {
-                launchGame()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(gameLogoName(game.bundleID))
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 17, height: 17)
-                        .clipShape(RoundedRectangle(cornerRadius: 3.5))
-
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 9, weight: .bold))
-
-                    Text("Vào Game")
-                        .font(.system(size: 12, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    LinearGradient(colors: [Theme.green, Theme.accent], startPoint: .leading, endPoint: .trailing)
-                )
-                .cornerRadius(10)
-                .shadow(color: Theme.green.opacity(0.35), radius: 5, y: 2)
-            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
