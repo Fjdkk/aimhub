@@ -124,11 +124,23 @@ public struct AirLiftSetupView: View {
                 .background(Theme.accent.opacity(0.12))
                 .cornerRadius(12)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.accent.opacity(0.3), lineWidth: 1))
-            case .paired(let name):
+            case .pinRequired(let pin):
+                HStack(spacing: 10) {
+                    Image(systemName: "key.fill")
+                        .foregroundColor(Theme.accent)
+                    Text("Mã PIN ghép đôi: \(pin)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Theme.accent)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.accent.opacity(0.12))
+                .cornerRadius(12)
+            case .success:
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
-                    Text("Ghép đôi thành công: \(name)")
+                    Text("Ghép đôi thành công!")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.green)
                 }
