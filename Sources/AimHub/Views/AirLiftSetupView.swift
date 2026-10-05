@@ -154,8 +154,10 @@ public struct AirLiftSetupView: View {
 
             Button {
                 controller.startPairing()
-                alertMessage = "Đã bắt đầu phát tín hiệu ghép đôi AirLift!\nHãy mở thiết bị máy tính để hoàn tất ghép nối."
-                showAlert = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    alertMessage = "Đã mở cổng Ghép Đôi\nVui lòng ghép đôi với thiết bị của bạn với AimHub Cheat"
+                    showAlert = true
+                }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "link")
