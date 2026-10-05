@@ -104,8 +104,58 @@ public struct AirLiftSetupView: View {
     
     private var actionButtonsCard: some View {
         VStack(spacing: 12) {
+            // Live Pairing Status Card
+            switch controller.state {
+            case .pairing(let step, let total, let message):
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Theme.accent))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Đang ghép đôi (Bước \(step)/\(total))")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(Theme.accent)
+                        Text(message)
+                            .font(.system(size: 11))
+                            .foregroundColor(Theme.muted)
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.accent.opacity(0.12))
+                .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.accent.opacity(0.3), lineWidth: 1))
+            case .paired(let name):
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Ghép đôi thành công: \(name)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.green)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(12)
+            case .failed(let reason):
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                    Text("Thất bại: \(reason)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.red)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(12)
+            case .idle:
+                EmptyView()
+            }
+
             Button {
                 controller.startPairing()
+                alertMessage = "Đã bắt đầu phát tín hiệu ghép đôi AirLift!\nHãy mở thiết bị máy tính để hoàn tất ghép nối."
+                showAlert = true
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "link")
