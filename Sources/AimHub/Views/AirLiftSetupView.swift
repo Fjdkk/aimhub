@@ -41,9 +41,6 @@ public struct AirLiftSetupView: View {
                     dismissButton: .default(Text(L10n.t("airlift.close")))
                 )
             }
-            .onAppear {
-                AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
-            }
         }
     }
     
@@ -108,7 +105,6 @@ public struct AirLiftSetupView: View {
     private var actionButtonsCard: some View {
         VStack(spacing: 12) {
             Button {
-                controller.triggerLocalNetworkPrompt()
                 controller.startPairing()
             } label: {
                 HStack(spacing: 8) {
