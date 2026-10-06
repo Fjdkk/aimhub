@@ -391,7 +391,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             let bindAddr = "0.0.0.0"
             let hostName = "AimHub"
             let hostModel = "Mac17,7"
-            let fallbackDeviceName = UIDevice.current.name
+            let fallbackName = UIDevice.current.name
             let fallbackUDID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
             let ctxBits = UInt(bitPattern: Unmanaged.passRetained(self).toOpaque())
             
@@ -429,7 +429,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
                 let errMsg = cString(result.error)
                 
                 if rc == 0 {
-                    let actualName = deviceName.isEmpty ? fallbackDeviceName : deviceName
+                    let actualName = deviceName.isEmpty ? fallbackName : deviceName
                     let actualUDID = deviceUDID.isEmpty ? fallbackUDID : deviceUDID
                     let record = AirLiftPairingRecord(
                         udid: actualUDID,
@@ -450,30 +450,30 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
                     ContainerAccess.diag("[AirLift] ✅ Ghép đôi thành công! Thiết bị: \(actualName) (\(actualUDID))")
                 } else {
                     let message = errMsg.isEmpty ? "Ghép đôi thất bại (mã \(rc)). Vui lòng thử lại." : errMsg
-                outcome = .failed(message)
-                ContainerAccess.diag("[AirLift] ❌ Ghép đôi thất bại: \(message)")
-            }
-            
-            stikpair_result_free(&result)
-            if let ctx = ctx {
-                Unmanaged<AirLiftPairingController>.fromOpaque(ctx).release()
-            }
-            
-            DispatchQueue.main.async {
-                self.stopAdvertising()
-                self.isPairingInProgress = false
-                self.state = outcome
-                if case .success = outcome {
-                    let actualName = deviceName.isEmpty ? UIDevice.current.name : deviceName
-                    self.isTunnelActive = self.isVPNActive
-                    self.postSuccessNotification(deviceName: actualName, udid: deviceUDID)
+                    outcome = .failed(message)
+                    ContainerAccess.diag("[AirLift] ❌ Ghép đôi thất bại: \(message)")
                 }
-                if let task = self.bgTask as UIBackgroundTaskIdentifier?, task != .invalid {
-                    UIApplication.shared.endBackgroundTask(task)
-                    self.bgTask = .invalid
+                
+                stikpair_result_free(&result)
+                if let ctx = ctx {
+                    Unmanaged<AirLiftPairingController>.fromOpaque(ctx).release()
+                }
+                
+                DispatchQueue.main.async {
+                    self.stopAdvertising()
+                    self.isPairingInProgress = false
+                    self.state = outcome
+                    if case .success = outcome {
+                        let actualName = deviceName.isEmpty ? fallbackName : deviceName
+                        self.isTunnelActive = self.isVPNActive
+                        self.postSuccessNotification(deviceName: actualName, udid: deviceUDID)
+                    }
+                    if let task = self.bgTask as UIBackgroundTaskIdentifier?, task != .invalid {
+                        UIApplication.shared.endBackgroundTask(task)
+                        self.bgTask = .invalid
+                    }
                 }
             }
-        }
         }
     }
     
@@ -486,10 +486,8 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             port: port
         )
         service.delegate = self
-        service.includesPeerToPeer = true
         service.setTXTRecord(NetService.data(fromTXTRecord: txt))
-        service.schedule(in: .main, forMode: .common)
-        service.publish(options: [])
+        service.publish()
         self.netService = service
         ContainerAccess.diag("[AirLift] 📡 Published Bonjour: \(serviceID) on port \(port) with \(txt.count) TXT keys.")
     }
