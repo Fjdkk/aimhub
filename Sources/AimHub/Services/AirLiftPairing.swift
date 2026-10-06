@@ -55,6 +55,36 @@ public func stikpair_run_host(
 @_silgen_name("stikpair_result_free")
 public func stikpair_result_free(_ r: UnsafeMutablePointer<StikPairResult>?)
 
+@_silgen_name("stikpair_free_string")
+public func stikpair_free_string(_ s: UnsafeMutablePointer<CChar>?)
+
+@_silgen_name("stikpair_write_app_file")
+public func stikpair_write_app_file(
+    _ pairing_file_path: UnsafePointer<CChar>?,
+    _ bundle_id: UnsafePointer<CChar>?,
+    _ relative_path: UnsafePointer<CChar>?,
+    _ data: UnsafePointer<UInt8>?,
+    _ data_len: Int,
+    _ err_out: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32
+
+@_silgen_name("stikpair_remove_app_file")
+public func stikpair_remove_app_file(
+    _ pairing_file_path: UnsafePointer<CChar>?,
+    _ bundle_id: UnsafePointer<CChar>?,
+    _ relative_path: UnsafePointer<CChar>?,
+    _ err_out: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32
+
+@_silgen_name("stikpair_app_file_exists")
+public func stikpair_app_file_exists(
+    _ pairing_file_path: UnsafePointer<CChar>?,
+    _ bundle_id: UnsafePointer<CChar>?,
+    _ relative_path: UnsafePointer<CChar>?,
+    _ out_exists: UnsafeMutablePointer<Int32>?,
+    _ err_out: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32
+
 // MARK: - AirLift Pairing Record & Storage
 
 public struct AirLiftPairingRecord: Codable {
@@ -184,6 +214,26 @@ public final class AirLiftPairingStore {
             try? plistData.write(to: fileURL)
             ContainerAccess.diag("[AirLift] Saved .mobiledevicepairing to disk: \(fileURL.lastPathComponent)")
         }
+    }
+    
+    public var pairingFilePath: String? {
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
+        let recordsDir = docs.appendingPathComponent("PairingRecords")
+        if let files = try? fm.contentsOfDirectory(atPath: recordsDir.path) {
+            for f in files where f.hasSuffix(".mobiledevicepairing") {
+                return recordsDir.appendingPathComponent(f).path
+            }
+        }
+        let plistFile = docs.appendingPathComponent("rp_pairing_file.plist")
+        if fm.fileExists(atPath: plistFile.path) {
+            return plistFile.path
+        }
+        let legacyPlist = recordsDir.appendingPathComponent("rp_pairing_file.plist")
+        if fm.fileExists(atPath: legacyPlist.path) {
+            return legacyPlist.path
+        }
+        return nil
     }
 }
 
