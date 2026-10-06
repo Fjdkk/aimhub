@@ -324,19 +324,13 @@ struct ModListView: View {
                 if let serverTabs = detail.tabs, !serverTabs.isEmpty {
                     for st in serverTabs {
                         if st.visible != false {
-                            // Chỉ thêm tab nếu có ít nhất 1 mod được cấp quyền nằm trong tab này
-                            let hasAllowedRules = filtered.contains { r in
-                                (r.tabID ?? "tab_aim") == st.id
-                            }
-                            if hasAllowedRules {
-                                extractedTabs.append(TabItem(
-                                    id: st.id,
-                                    name: st.name,
-                                    icon: iconForTab(name: st.name, id: st.id),
-                                    order: st.order ?? 99,
-                                    note: sanitizeTabNote(st.note)
-                                ))
-                            }
+                            extractedTabs.append(TabItem(
+                                id: st.id,
+                                name: st.name,
+                                icon: iconForTab(name: st.name, id: st.id),
+                                order: st.order ?? 99,
+                                note: sanitizeTabNote(st.note)
+                            ))
                         }
                     }
                 } else {
@@ -358,17 +352,14 @@ struct ModListView: View {
                 }
 
                 if extractedTabs.count <= 1 {
-                    var defaultTabs = [
+                    extractedTabs = [
                         TabItem(id: "all", name: "Tất cả", icon: "square.grid.2x2.fill", order: 0),
                         TabItem(id: "tab_aim", name: "List Aim", icon: "crosshair", order: 1),
                         TabItem(id: "tab_locator", name: "Định Vị + Xuyên tường", icon: "eye.fill", order: 2),
                         TabItem(id: "tab_esp_aim", name: "ESP + AIMBOT", icon: "viewfinder", order: 3),
-                        TabItem(id: "tab_skin", name: "Skin Mod", icon: "tshirt.fill", order: 4)
+                        TabItem(id: "tab_skin", name: "Skin Mod", icon: "tshirt.fill", order: 4),
+                        TabItem(id: "tab_menu_aimhub", name: "Menu AimHub", icon: "bolt.shield.fill", order: 5)
                     ]
-                    if filtered.contains(where: { ($0.tabID ?? "") == "tab_menu_aimhub" || $0.slot == "menu_aimhub" }) {
-                        defaultTabs.append(TabItem(id: "tab_menu_aimhub", name: "Menu AimHub", icon: "bolt.shield.fill", order: 5))
-                    }
-                    extractedTabs = defaultTabs
                 }
 
                 tabs = extractedTabs.sorted(by: { $0.order < $1.order })
