@@ -376,17 +376,22 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             }
         }
         
-        self.state = .pairing(step: 1, total: 2, message: "Đang khởi động engine Apple RemotePairing (StikPair/idevice)...")
+        self.state = .pairing(step: 1, total: 2, message: "Đang yêu cầu quyền Mạng Cục Bộ (Local Network)...")
         
-        // 2. Kích hoạt thăm dò Mạng Cục Bộ
-        triggerLocalNetworkPrompt()
-        
-        // 3. Khởi chạy Rust FFI Server trên Background Thread
-        let outPath = Self.pairingFilePath()
-        let bindAddr = "0.0.0.0"
-        let hostName = "AimHub"
-        let hostModel = "Mac17,7"
-        let ctxBits = UInt(bitPattern: Unmanaged.passRetained(self).toOpaque())
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            
+            // 2. Kích hoạt thăm dò Mạng Cục Bộ & chờ cấp quyền (iOS 18 requirement)
+            _ = await AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
+            
+            self.state = .pairing(step: 1, total: 2, message: "Đang khởi động engine Apple RemotePairing (StikPair/idevice)...")
+            
+            // 3. Khởi chạy Rust FFI Server trên Background Thread
+            let outPath = Self.pairingFilePath()
+            let bindAddr = "0.0.0.0"
+            let hostName = "AimHub"
+            let hostModel = "Mac17,7"
+            let ctxBits = UInt(bitPattern: Unmanaged.passRetained(self).toOpaque())
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -466,6 +471,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
                     self.bgTask = .invalid
                 }
             }
+        }
         }
     }
     
@@ -621,52 +627,65 @@ private func cString(_ ptr: UnsafeMutablePointer<CChar>?) -> String {
     return String(cString: ptr)
 }
 
-// MARK: - Local Network Authorization Helper (StikPair Probe Standard)
+// MARK: - Local Network Authorization Helper (StikPair Probe Standard for iOS 18)
 
 public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegate, NetServiceBrowserDelegate {
     public static let shared = AirLiftLocalNetworkAuthorization()
     
     private var browser: NWBrowser?
     private var listener: NWListener?
-    private var hasRequested = false
+    private var continuation: CheckedContinuation<Bool, Never>?
     private let probeType = "_stikpairprobe._tcp"
     
     private override init() {
         super.init()
     }
     
-    public func requestAuthorization() {
-        guard !hasRequested else { return }
-        hasRequested = true
-        
-        let params = NWParameters.tcp
-        params.includePeerToPeer = true
-        
-        let l = try? NWListener(using: params)
-        l?.service = NWListener.Service(name: "AimHubProbe", type: probeType)
-        l?.newConnectionHandler = { $0.cancel() }
-        self.listener = l
-        
-        let b = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
-        b.stateUpdateHandler = { state in
-            ContainerAccess.diag("[AirLift] Local Network NWBrowser state: \(state)")
-        }
-        b.browseResultsChangedHandler = { [weak self] results, _ in
-            if !results.isEmpty {
-                self?.cleanup()
+    public func requestAuthorization(timeout: TimeInterval = 8.0) async -> Bool {
+        await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            self.continuation = cont
+            
+            let params = NWParameters.tcp
+            params.includePeerToPeer = true
+            
+            let l = try? NWListener(using: params)
+            l?.service = NWListener.Service(name: "AimHubProbe", type: probeType)
+            l?.newConnectionHandler = { $0.cancel() }
+            l?.stateUpdateHandler = { [weak self] state in
+                if case .failed = state {
+                    self?.finish(false)
+                }
             }
-        }
-        self.browser = b
-        
-        l?.start(queue: .main)
-        b.start(queue: .main)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
-            self?.cleanup()
+            self.listener = l
+            
+            let b = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
+            b.stateUpdateHandler = { [weak self] state in
+                ContainerAccess.diag("[AirLift] Local Network NWBrowser state: \(state)")
+                if case .failed = state {
+                    self?.finish(false)
+                }
+            }
+            b.browseResultsChangedHandler = { [weak self] results, _ in
+                if !results.isEmpty {
+                    ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
+                    self?.finish(true)
+                }
+            }
+            self.browser = b
+            
+            l?.start(queue: .main)
+            b.start(queue: .main)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                self?.finish(true) // Fallback tiếp tục sau timeout
+            }
         }
     }
     
-    private func cleanup() {
+    private func finish(_ authorized: Bool) {
+        guard let cont = continuation else { return }
+        continuation = nil
+        cont.resume(returning: authorized)
         browser?.cancel()
         browser = nil
         listener?.cancel()
