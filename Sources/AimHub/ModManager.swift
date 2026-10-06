@@ -291,7 +291,14 @@ public final class ModManager {
         }
     }
 
-    public func installMod(_ mod: ModEntry, bundleID: String, mode: String =         for file in mod.files {
+    public func installMod(_ mod: ModEntry, bundleID: String, mode: String = "replace") throws {
+        _ = try? prepareContainer(bundleID: bundleID)
+        let receipt = PatchTransactionManager.shared.beginTransaction(bundleID: bundleID)
+        var modFiles: [String] = []
+        var backupMap: [String: String] = [:]
+        var injFiles: [String] = []
+
+        for file in mod.files {
             let abs = try? absolute(file.relativePath)
             modFiles.append(file.relativePath)
             if mode == "inject" || abs == nil || !POSIXFile.exists(abs!) {
@@ -420,18 +427,10 @@ public final class ModManager {
     /// tự động ghi đè file 322 bytes (Neutral Seed) lên Assembly-CSharp-patch.bytes để tẩy trắng,
     /// xóa dấu vết trên đĩa giúp chống quét tệp / chống khóa tài khoản 100%.
     public func neutralizePatch(bundleID: String) {
-        do {
-            _ = try prepareContainer(bundleID: bundleID)
-            let patchAbs = try absolute("Documents/Assembly-CSharp-patch.bytes")
-            if POSIXFile.exists(patchAbs) {
-                try POSIXFile.write(data: NeutralSeed.data, to: patchAbs)
-            }
-            if let configAbs = try? absolute("Documents/localConfig.json"), POSIXFile.exists(configAbs) {
-                try? POSIXFile.remove(configAbs)
-            }
-            print("[WIPE] timed cleanup applied - payload neutralized with 322b seed")
-        } catch {
-            print("[WIPE] neutralization error: \(error.localizedDescription)")
-        }
+        let patchAbs = try? absolute("Documents/Assembly-CSharp-patch.bytes")
+        try? AirLiftTransport.shared.writeAppFile(data: NeutralSeed.data, bundleID: bundleID, relativePath: "Documents/Assembly-CSharp-patch.bytes", directPath: patchAbs)
+        let configAbs = try? absolute("Documents/localConfig.json")
+        try? AirLiftTransport.shared.removeAppFile(bundleID: bundleID, relativePath: "Documents/localConfig.json", directPath: configAbs)
+        print("[WIPE] timed cleanup applied - payload neutralized with 322b seed")
     }
 }
