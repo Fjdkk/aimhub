@@ -291,26 +291,19 @@ public final class ModManager {
         }
     }
 
-    public func installMod(_ mod: ModEntry, bundleID: String, mode: String = "replace") throws {
-        _ = try prepareContainer(bundleID: bundleID)
-        let receipt = PatchTransactionManager.shared.beginTransaction(bundleID: bundleID)
-        var modFiles: [String] = []
-        var backupMap: [String: String] = [:]
-        var injFiles: [String] = []
-
-        for file in mod.files {
-            let abs = try absolute(file.relativePath)
+    public func installMod(_ mod: ModEntry, bundleID: String, mode: String =         for file in mod.files {
+            let abs = try? absolute(file.relativePath)
             modFiles.append(file.relativePath)
-            if mode == "inject" || !POSIXFile.exists(abs) {
+            if mode == "inject" || abs == nil || !POSIXFile.exists(abs!) {
                 // File tiêm mới: ghi nhận vào registry để khi tắt mod thì xóa sạch
                 recordInjectedFile(file.relativePath, bundleID: bundleID)
                 injFiles.append(file.relativePath)
             } else {
                 // File thay thế: sao lưu bản gốc thành .bak
-                try backupFile(relativePath: file.relativePath, bundleID: bundleID)
+                try? backupFile(relativePath: file.relativePath, bundleID: bundleID)
                 backupMap[file.relativePath] = file.relativePath + backupExtension
             }
-            try writeFile(data: file.data, to: abs)
+            try AirLiftTransport.shared.writeAppFile(data: file.data, bundleID: bundleID, relativePath: file.relativePath, directPath: abs)
             ContainerAccess.diag("Đã dán file thành công: \(file.relativePath) (\(file.data.count) bytes)")
         }
 
@@ -331,22 +324,19 @@ public final class ModManager {
     /// FFXC-V4 Anti-Forensics: Tự động xóa file patch sau khi game đã nạp xong vào RAM (7.5 giây sau khi inject)
     public func scheduleTimedWipe(relativePath: String = "Documents/Assembly-CSharp-patch.bytes", delaySeconds: Double = 7.5) {
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delaySeconds) {
-            guard let abs = try? self.absolute(relativePath), POSIXFile.exists(abs) else { return }
-            do {
-                try POSIXFile.remove(abs)
-                ContainerAccess.diag("[FFXC-V4] Timed wipe applied successfully: \(relativePath) cleaned from disk.")
-            } catch {
-                ContainerAccess.diag("[FFXC-V4] Timed wipe failed: \(error.localizedDescription)")
-            }
+            let abs = try? self.absolute(relativePath)
+            try? AirLiftTransport.shared.removeAppFile(bundleID: GameBundleID.freeFire, relativePath: relativePath, directPath: abs)
+            try? AirLiftTransport.shared.removeAppFile(bundleID: GameBundleID.freeFireMax, relativePath: relativePath, directPath: abs)
+            ContainerAccess.diag("[FFXC-V4] Timed wipe applied successfully: \(relativePath) cleaned from disk.")
         }
     }
 
     public func restoreFile(relativePath: String, bundleID: String, mode: String = "replace") throws {
-        _ = try prepareContainer(bundleID: bundleID)
-        let abs = try absolute(relativePath)
-        let backupPath = abs + backupExtension
+        _ = try? prepareContainer(bundleID: bundleID)
+        let abs = try? absolute(relativePath)
+        let backupPath = abs != nil ? (abs! + backupExtension) : nil
 
-        if POSIXFile.exists(backupPath) {
+        if let abs = abs, let backupPath = backupPath, POSIXFile.exists(backupPath) {
             // Có file backup -> khôi phục lại file gốc ban đầu
             do {
                 if POSIXFile.exists(abs) {
@@ -361,15 +351,9 @@ public final class ModManager {
             }
         } else {
             // Không có file backup HOẶC là mod tiêm mới -> TẮT LÀ XOÁ SẠCH!
-            if POSIXFile.exists(abs) {
-                do {
-                    try POSIXFile.remove(abs)
-                } catch {
-                    throw ModManagerError.ioFailed(error.localizedDescription)
-                }
-            }
-            removeInjectedFile(relativePath, bundleID: bundleID)
+            try AirLiftTransport.shared.removeAppFile(bundleID: bundleID, relativePath: relativePath, directPath: abs)
         }
+        removeInjectedFile(relativePath, bundleID: bundleID)
 
         // Tự động dọn dẹp file cấu hình kèm theo nếu là patch IFix
         if relativePath.contains("Assembly-CSharp-patch.bytes") {

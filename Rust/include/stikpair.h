@@ -59,6 +59,26 @@ void stikpair_apple_tv_session_cancel(StikPairAppleTvSession *session);
 void stikpair_apple_tv_session_free(StikPairAppleTvSession *session);
 
 void stikpair_result_free(StikPairResult *r);
+void stikpair_free_string(char *s);
+
+// AirLift App Container File Access (AFC / HouseArrest)
+int32_t stikpair_write_app_file(const char *pairing_file_path,
+                                const char *bundle_id,
+                                const char *relative_path,
+                                const uint8_t *data,
+                                size_t data_len,
+                                char **err_out);
+
+int32_t stikpair_remove_app_file(const char *pairing_file_path,
+                                 const char *bundle_id,
+                                 const char *relative_path,
+                                 char **err_out);
+
+int32_t stikpair_app_file_exists(const char *pairing_file_path,
+                                 const char *bundle_id,
+                                 const char *relative_path,
+                                 int32_t *out_exists,
+                                 char **err_out);
 
 #ifdef __cplusplus
 }
