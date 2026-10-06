@@ -391,63 +391,65 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             let bindAddr = "0.0.0.0"
             let hostName = "AimHub"
             let hostModel = "Mac17,7"
+            let fallbackDeviceName = UIDevice.current.name
+            let fallbackUDID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
             let ctxBits = UInt(bitPattern: Unmanaged.passRetained(self).toOpaque())
-        
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            let ctx = UnsafeMutableRawPointer(bitPattern: ctxBits)
-            var result = StikPairResult()
             
-            ContainerAccess.diag("[AirLift] Starting stikpair_run_host on \(bindAddr)...")
-            
-            let rc = bindAddr.withCString { bindC in
-                hostName.withCString { nameC in
-                    hostModel.withCString { modelC in
-                        outPath.withCString { outC in
-                            stikpair_run_host(
-                                bindC,
-                                0, // Dynamic port
-                                nameC,
-                                modelC,
-                                outC,
-                                stikPairReadyCallback,
-                                stikPairPinCallback,
-                                ctx,
-                                &result
-                            )
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else { return }
+                let ctx = UnsafeMutableRawPointer(bitPattern: ctxBits)
+                var result = StikPairResult()
+                
+                ContainerAccess.diag("[AirLift] Starting stikpair_run_host on \(bindAddr)...")
+                
+                let rc = bindAddr.withCString { bindC in
+                    hostName.withCString { nameC in
+                        hostModel.withCString { modelC in
+                            outPath.withCString { outC in
+                                stikpair_run_host(
+                                    bindC,
+                                    0, // Dynamic port
+                                    nameC,
+                                    modelC,
+                                    outC,
+                                    stikPairReadyCallback,
+                                    stikPairPinCallback,
+                                    ctx,
+                                    &result
+                                )
+                            }
                         }
                     }
                 }
-            }
-            
-            let outcome: AirLiftPairingState
-            let deviceUDID = cString(result.device_udid)
-            let deviceName = cString(result.device_name)
-            let pairingPath = cString(result.pairing_file_path)
-            let errMsg = cString(result.error)
-            
-            if rc == 0 {
-                let actualName = deviceName.isEmpty ? UIDevice.current.name : deviceName
-                let actualUDID = deviceUDID.isEmpty ? (UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString) : deviceUDID
-                let record = AirLiftPairingRecord(
-                    udid: actualUDID,
-                    deviceName: actualName,
-                    systemBUID: UUID().uuidString,
-                    hostID: "AimHub-Host-\(actualUDID.prefix(8))",
-                    pairedAt: Date(),
-                    pin: self.currentPin
-                )
-                AirLiftPairingStore.shared.saveStructuredRecord(record)
                 
-                // Đọc file plist tạo bởi Rust nếu có
-                if let data = try? Data(contentsOf: URL(fileURLWithPath: pairingPath)) {
-                    AirLiftPairingStore.shared.savePairingRecord(data)
-                }
+                let outcome: AirLiftPairingState
+                let deviceUDID = cString(result.device_udid)
+                let deviceName = cString(result.device_name)
+                let pairingPath = cString(result.pairing_file_path)
+                let errMsg = cString(result.error)
                 
-                outcome = .success
-                ContainerAccess.diag("[AirLift] ✅ Ghép đôi thành công! Thiết bị: \(actualName) (\(actualUDID))")
-            } else {
-                let message = errMsg.isEmpty ? "Ghép đôi thất bại (mã \(rc)). Vui lòng thử lại." : errMsg
+                if rc == 0 {
+                    let actualName = deviceName.isEmpty ? fallbackDeviceName : deviceName
+                    let actualUDID = deviceUDID.isEmpty ? fallbackUDID : deviceUDID
+                    let record = AirLiftPairingRecord(
+                        udid: actualUDID,
+                        deviceName: actualName,
+                        systemBUID: UUID().uuidString,
+                        hostID: "AimHub-Host-\(actualUDID.prefix(8))",
+                        pairedAt: Date(),
+                        pin: self.currentPin
+                    )
+                    AirLiftPairingStore.shared.saveStructuredRecord(record)
+                    
+                    // Đọc file plist tạo bởi Rust nếu có
+                    if let data = try? Data(contentsOf: URL(fileURLWithPath: pairingPath)) {
+                        AirLiftPairingStore.shared.savePairingRecord(data)
+                    }
+                    
+                    outcome = .success
+                    ContainerAccess.diag("[AirLift] ✅ Ghép đôi thành công! Thiết bị: \(actualName) (\(actualUDID))")
+                } else {
+                    let message = errMsg.isEmpty ? "Ghép đôi thất bại (mã \(rc)). Vui lòng thử lại." : errMsg
                 outcome = .failed(message)
                 ContainerAccess.diag("[AirLift] ❌ Ghép đôi thất bại: \(message)")
             }
@@ -531,7 +533,9 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     }
     
     public func triggerLocalNetworkPrompt() {
-        AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
+        Task {
+            _ = await AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
+        }
     }
     
     public func resetPairing() {
