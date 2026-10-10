@@ -376,102 +376,98 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             }
         }
         
-        self.state = .pairing(step: 1, total: 2, message: "Đang yêu cầu quyền Mạng Cục Bộ (Local Network)...")
+        self.state = .pairing(step: 1, total: 2, message: "Đang mở cổng ghép đôi Apple RemotePairing...")
         
-        Task { @MainActor [weak self] in
+        // Kích hoạt thăm dò mạng ngầm song song (không await chặn luồng)
+        triggerLocalNetworkPrompt()
+        
+        // 2. Khởi chạy Rust FFI Server NGAY LẬP TỨC trên Background Thread
+        let outPath = Self.pairingFilePath()
+        let bindAddr = "0.0.0.0"
+        let hostName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String 
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String 
+            ?? "AimHub"
+        let hostModel = "Mac17,7"
+        let fallbackName = UIDevice.current.name
+        let fallbackUDID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        let ctxBits = UInt(bitPattern: Unmanaged.passRetained(self).toOpaque())
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+            let ctx = UnsafeMutableRawPointer(bitPattern: ctxBits)
+            var result = StikPairResult()
             
-            // 2. Kích hoạt thăm dò Mạng Cục Bộ & chờ cấp quyền (iOS 18 requirement)
-            _ = await AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
+            ContainerAccess.diag("[AirLift] Starting stikpair_run_host on \(bindAddr) instantly...")
             
-            self.state = .pairing(step: 1, total: 2, message: "Đang khởi động engine Apple RemotePairing (StikPair/idevice)...")
-            
-            // 3. Khởi chạy Rust FFI Server trên Background Thread
-            let outPath = Self.pairingFilePath()
-            let bindAddr = "0.0.0.0"
-            let hostName = "AimHub"
-            let hostModel = "Mac17,7"
-            let fallbackName = UIDevice.current.name
-            let fallbackUDID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-            let ctxBits = UInt(bitPattern: Unmanaged.passRetained(self).toOpaque())
-            
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                guard let self = self else { return }
-                let ctx = UnsafeMutableRawPointer(bitPattern: ctxBits)
-                var result = StikPairResult()
-                
-                ContainerAccess.diag("[AirLift] Starting stikpair_run_host on \(bindAddr)...")
-                
-                let rc = bindAddr.withCString { bindC in
-                    hostName.withCString { nameC in
-                        hostModel.withCString { modelC in
-                            outPath.withCString { outC in
-                                stikpair_run_host(
-                                    bindC,
-                                    0, // Dynamic port
-                                    nameC,
-                                    modelC,
-                                    outC,
-                                    stikPairReadyCallback,
-                                    stikPairPinCallback,
-                                    ctx,
-                                    &result
-                                )
-                            }
+            let rc = bindAddr.withCString { bindC in
+                hostName.withCString { nameC in
+                    hostModel.withCString { modelC in
+                        outPath.withCString { outC in
+                            stikpair_run_host(
+                                bindC,
+                                0, // Dynamic port
+                                nameC,
+                                modelC,
+                                outC,
+                                stikPairReadyCallback,
+                                stikPairPinCallback,
+                                ctx,
+                                &result
+                            )
                         }
                     }
                 }
+            }
+            
+            let outcome: AirLiftPairingState
+            let deviceUDID = cString(result.device_udid)
+            let deviceName = cString(result.device_name)
+            let pairingPath = cString(result.pairing_file_path)
+            let errMsg = cString(result.error)
+            
+            if rc == 0 {
+                let actualName = deviceName.isEmpty ? fallbackName : deviceName
+                let actualUDID = deviceUDID.isEmpty ? fallbackUDID : deviceUDID
+                let record = AirLiftPairingRecord(
+                    udid: actualUDID,
+                    deviceName: actualName,
+                    systemBUID: UUID().uuidString,
+                    hostID: "AimHub-Host-\(actualUDID.prefix(8))",
+                    pairedAt: Date(),
+                    pin: self.currentPin
+                )
+                AirLiftPairingStore.shared.saveStructuredRecord(record)
                 
-                let outcome: AirLiftPairingState
-                let deviceUDID = cString(result.device_udid)
-                let deviceName = cString(result.device_name)
-                let pairingPath = cString(result.pairing_file_path)
-                let errMsg = cString(result.error)
+                // Đọc file plist tạo bởi Rust nếu có
+                if let data = try? Data(contentsOf: URL(fileURLWithPath: pairingPath)) {
+                    AirLiftPairingStore.shared.savePairingRecord(data)
+                }
                 
-                if rc == 0 {
+                outcome = .success
+                ContainerAccess.diag("[AirLift] ✅ Ghép đôi thành công! Thiết bị: \(actualName) (\(actualUDID))")
+            } else {
+                let message = errMsg.isEmpty ? "Ghép đôi thất bại (mã \(rc)). Vui lòng thử lại." : errMsg
+                outcome = .failed(message)
+                ContainerAccess.diag("[AirLift] ❌ Ghép đôi thất bại: \(message)")
+            }
+            
+            stikpair_result_free(&result)
+            if let ctx = ctx {
+                Unmanaged<AirLiftPairingController>.fromOpaque(ctx).release()
+            }
+            
+            DispatchQueue.main.async {
+                self.stopAdvertising()
+                self.isPairingInProgress = false
+                self.state = outcome
+                if case .success = outcome {
                     let actualName = deviceName.isEmpty ? fallbackName : deviceName
-                    let actualUDID = deviceUDID.isEmpty ? fallbackUDID : deviceUDID
-                    let record = AirLiftPairingRecord(
-                        udid: actualUDID,
-                        deviceName: actualName,
-                        systemBUID: UUID().uuidString,
-                        hostID: "AimHub-Host-\(actualUDID.prefix(8))",
-                        pairedAt: Date(),
-                        pin: self.currentPin
-                    )
-                    AirLiftPairingStore.shared.saveStructuredRecord(record)
-                    
-                    // Đọc file plist tạo bởi Rust nếu có
-                    if let data = try? Data(contentsOf: URL(fileURLWithPath: pairingPath)) {
-                        AirLiftPairingStore.shared.savePairingRecord(data)
-                    }
-                    
-                    outcome = .success
-                    ContainerAccess.diag("[AirLift] ✅ Ghép đôi thành công! Thiết bị: \(actualName) (\(actualUDID))")
-                } else {
-                    let message = errMsg.isEmpty ? "Ghép đôi thất bại (mã \(rc)). Vui lòng thử lại." : errMsg
-                    outcome = .failed(message)
-                    ContainerAccess.diag("[AirLift] ❌ Ghép đôi thất bại: \(message)")
+                    self.isTunnelActive = self.isVPNActive
+                    self.postSuccessNotification(deviceName: actualName, udid: deviceUDID)
                 }
-                
-                stikpair_result_free(&result)
-                if let ctx = ctx {
-                    Unmanaged<AirLiftPairingController>.fromOpaque(ctx).release()
-                }
-                
-                DispatchQueue.main.async {
-                    self.stopAdvertising()
-                    self.isPairingInProgress = false
-                    self.state = outcome
-                    if case .success = outcome {
-                        let actualName = deviceName.isEmpty ? fallbackName : deviceName
-                        self.isTunnelActive = self.isVPNActive
-                        self.postSuccessNotification(deviceName: actualName, udid: deviceUDID)
-                    }
-                    if let task = self.bgTask as UIBackgroundTaskIdentifier?, task != .invalid {
-                        UIApplication.shared.endBackgroundTask(task)
-                        self.bgTask = .invalid
-                    }
+                if let task = self.bgTask as UIBackgroundTaskIdentifier?, task != .invalid {
+                    UIApplication.shared.endBackgroundTask(task)
+                    self.bgTask = .invalid
                 }
             }
         }
@@ -487,9 +483,10 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         )
         service.delegate = self
         service.setTXTRecord(NetService.data(fromTXTRecord: txt))
+        service.schedule(in: .main, forMode: .common)
         service.publish()
         self.netService = service
-        ContainerAccess.diag("[AirLift] 📡 Published Bonjour: \(serviceID) on port \(port) with \(txt.count) TXT keys.")
+        ContainerAccess.diag("[AirLift] 📡 Published Bonjour: \(serviceID) on port \(port) with \(txt.count) TXT keys (RunLoop common modes scheduled).")
     }
     
     fileprivate func stopAdvertising() {
