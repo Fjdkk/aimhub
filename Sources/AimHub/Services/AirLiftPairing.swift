@@ -243,13 +243,19 @@ public final class AirLiftPairingStore {
                 let name = plist["DeviceName"] as? String ?? UIDevice.current.name
                 let pin = plist["PairingPIN"] as? String ?? ""
                 let hostID = plist["HostIdentifier"] as? String ?? "AimHub-Host-\(udid.prefix(8))"
+                let rootCert = plist["RootCertificate"] as? Data
+                let devCert = plist["DeviceCertificate"] as? Data
+                let hostKey = plist["HostPrivateKey"] as? Data
                 let record = AirLiftPairingRecord(
                     udid: udid,
                     deviceName: name,
                     systemBUID: plist["SystemBUID"] as? String ?? UUID().uuidString,
                     hostID: hostID,
                     pairedAt: Date(),
-                    pin: pin
+                    pin: pin,
+                    rootCertificate: rootCert,
+                    deviceCertificate: devCert,
+                    hostPrivateKey: hostKey
                 )
                 saveStructuredRecord(record)
                 ContainerAccess.diag("[AirLift] 🔄 Auto-recovered pairing record from disk: \(name) (\(udid))")
@@ -468,20 +474,36 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             if rc == 0 {
                 let actualName = deviceName.isEmpty ? fallbackName : deviceName
                 let actualUDID = deviceUDID.isEmpty ? fallbackUDID : deviceUDID
+                var rootCert: Data? = nil
+                var devCert: Data? = nil
+                var hostKey: Data? = nil
+                var sysBuid = UUID().uuidString
+                var hostId = "AimHub-Host-\(actualUDID.prefix(8))"
+                
+                // Đọc file plist tạo bởi Rust nếu có để trích xuất chứng chỉ
+                if let data = try? Data(contentsOf: URL(fileURLWithPath: pairingPath)) {
+                    AirLiftPairingStore.shared.savePairingRecord(data)
+                    if let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] {
+                        rootCert = plist["RootCertificate"] as? Data
+                        devCert = plist["DeviceCertificate"] as? Data
+                        hostKey = plist["HostPrivateKey"] as? Data
+                        if let b = plist["SystemBUID"] as? String { sysBuid = b }
+                        if let h = plist["HostIdentifier"] as? String { hostId = h }
+                    }
+                }
+                
                 let record = AirLiftPairingRecord(
                     udid: actualUDID,
                     deviceName: actualName,
-                    systemBUID: UUID().uuidString,
-                    hostID: "AimHub-Host-\(actualUDID.prefix(8))",
+                    systemBUID: sysBuid,
+                    hostID: hostId,
                     pairedAt: Date(),
-                    pin: self.currentPin
+                    pin: self.currentPin,
+                    rootCertificate: rootCert,
+                    deviceCertificate: devCert,
+                    hostPrivateKey: hostKey
                 )
                 AirLiftPairingStore.shared.saveStructuredRecord(record)
-                
-                // Đọc file plist tạo bởi Rust nếu có
-                if let data = try? Data(contentsOf: URL(fileURLWithPath: pairingPath)) {
-                    AirLiftPairingStore.shared.savePairingRecord(data)
-                }
                 
                 outcome = .success
                 ContainerAccess.diag("[AirLift] ✅ Ghép đôi thành công! Thiết bị: \(actualName) (\(actualUDID))")
