@@ -16,6 +16,10 @@ public struct AirLiftSetupView: View {
                 
                 ScrollView {
                     VStack(spacing: 16) {
+                        if !controller.isNotificationAuthorized {
+                            notificationWarningCard
+                        }
+                        
                         systemStatusCard
                         
                         actionButtonsCard
@@ -42,6 +46,41 @@ public struct AirLiftSetupView: View {
                 )
             }
         }
+    }
+    
+    private var notificationWarningCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bell.badge.slash.fill")
+                .font(.system(size: 24))
+                .foregroundColor(.orange)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Chưa bật quyền Thông báo")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.orange)
+                Text("Bật thông báo trong Cài đặt để nhận mã PIN ghép đôi tức thì khi ứng dụng chạy ngầm.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.muted)
+            }
+            
+            Spacer()
+            
+            Button("Mở Cài đặt") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            .font(.system(size: 12, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.orange)
+            .cornerRadius(8)
+        }
+        .padding(14)
+        .background(Color.orange.opacity(0.12))
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.orange.opacity(0.3), lineWidth: 1))
     }
     
     private var systemStatusCard: some View {

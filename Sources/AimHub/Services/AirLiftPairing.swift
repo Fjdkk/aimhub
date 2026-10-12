@@ -235,6 +235,27 @@ public final class AirLiftPairingStore {
         }
         return nil
     }
+    
+    public func ensureRecordLoaded() {
+        if loadStructuredRecord() == nil, let path = pairingFilePath, let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+            if let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+               let udid = plist["UDID"] as? String {
+                let name = plist["DeviceName"] as? String ?? UIDevice.current.name
+                let pin = plist["PairingPIN"] as? String ?? ""
+                let hostID = plist["HostIdentifier"] as? String ?? "AimHub-Host-\(udid.prefix(8))"
+                let record = AirLiftPairingRecord(
+                    udid: udid,
+                    deviceName: name,
+                    systemBUID: plist["SystemBUID"] as? String ?? UUID().uuidString,
+                    hostID: hostID,
+                    pairedAt: Date(),
+                    pin: pin
+                )
+                saveStructuredRecord(record)
+                ContainerAccess.diag("[AirLift] 🔄 Auto-recovered pairing record from disk: \(name) (\(udid))")
+            }
+        }
+    }
 }
 
 // MARK: - AirLift State
@@ -314,6 +335,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     @Published public var isWiFiConnected: Bool = true
     @Published public var isVPNActive: Bool = false
     @Published public var currentPin: String = ""
+    @Published public var isNotificationAuthorized: Bool = true
     
     private var pathMonitor: NWPathMonitor?
     private var netService: NetService?
@@ -323,16 +345,34 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     
     private override init() {
         super.init()
+        AirLiftPairingStore.shared.ensureRecordLoaded()
         if !AirLiftPairingStore.shared.lastPin.isEmpty {
             self.currentPin = AirLiftPairingStore.shared.lastPin
         }
         startNetworkMonitor()
-        requestNotificationPermission()
+        checkNotificationPermission()
     }
     
-    private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            ContainerAccess.diag("[AirLift] Notification permission granted: \(granted)")
+    public func checkNotificationPermission() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                let status = settings.authorizationStatus
+                let granted = (status == .authorized || status == .provisional)
+                self.isNotificationAuthorized = granted
+                ContainerAccess.diag("[AirLift] Notification status: \(status.rawValue), authorized: \(granted)")
+                if status == .notDetermined {
+                    self.requestNotificationPermission()
+                }
+            }
+        }
+    }
+    
+    public func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { [weak self] granted, _ in
+            DispatchQueue.main.async {
+                self?.isNotificationAuthorized = granted
+                ContainerAccess.diag("[AirLift] Notification permission granted: \(granted)")
+            }
         }
     }
     
@@ -507,9 +547,20 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         content.title = "AimHub Cheat"
         content.body = "Mã ghép đôi AimHub: \(pin)\nNhập mã này trên màn hình Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Ghép đôi."
         content.sound = .default
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+            content.relevanceScore = 1.0
+        }
         
-        let request = UNNotificationRequest(identifier: "aimhub.airlift.pin", content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        let request = UNNotificationRequest(identifier: "aimhub.airlift.pin", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                ContainerAccess.diag("[AirLift] ⚠️ Lỗi gửi thông báo PIN: \(error.localizedDescription)")
+            } else {
+                ContainerAccess.diag("[AirLift] 🔔 Đã bắn biểu ngữ mã PIN thành công!")
+            }
+        }
     }
     
     private func postSuccessNotification(deviceName: String, udid: String) {
@@ -517,8 +568,12 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         content.title = "AimHub Cheat"
         content.body = "Ghép đôi thành công! (\(deviceName))"
         content.sound = .default
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .active
+        }
         
-        let request = UNNotificationRequest(identifier: "aimhub.airlift.success", content: content, trigger: nil)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        let request = UNNotificationRequest(identifier: "aimhub.airlift.success", content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
     
@@ -528,9 +583,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     }
     
     public func triggerLocalNetworkPrompt() {
-        Task {
-            _ = await AirLiftLocalNetworkAuthorization.shared.requestAuthorization()
-        }
+        AirLiftLocalNetworkAuthorization.shared.triggerPrompt()
     }
     
     public func resetPairing() {
@@ -626,65 +679,53 @@ private func cString(_ ptr: UnsafeMutablePointer<CChar>?) -> String {
     return String(cString: ptr)
 }
 
-// MARK: - Local Network Authorization Helper (StikPair Probe Standard for iOS 18)
+// MARK: - Local Network Authorization Helper (Standard TCP for iOS 18)
 
 public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegate, NetServiceBrowserDelegate {
     public static let shared = AirLiftLocalNetworkAuthorization()
     
     private var browser: NWBrowser?
     private var listener: NWListener?
-    private var continuation: CheckedContinuation<Bool, Never>?
-    private let probeType = "_stikpairprobe._tcp"
+    private var isProbing: Bool = false
+    private let probeType = "_aimhub._tcp"
     
     private override init() {
         super.init()
     }
     
-    public func requestAuthorization(timeout: TimeInterval = 8.0) async -> Bool {
-        await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
-            self.continuation = cont
-            
-            let params = NWParameters.tcp
-            params.includePeerToPeer = true
-            
-            let l = try? NWListener(using: params)
-            l?.service = NWListener.Service(name: "AimHubProbe", type: probeType)
-            l?.newConnectionHandler = { $0.cancel() }
-            l?.stateUpdateHandler = { [weak self] state in
-                if case .failed = state {
-                    self?.finish(false)
-                }
-            }
-            self.listener = l
-            
-            let b = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
-            b.stateUpdateHandler = { [weak self] state in
-                ContainerAccess.diag("[AirLift] Local Network NWBrowser state: \(state)")
-                if case .failed = state {
-                    self?.finish(false)
-                }
-            }
-            b.browseResultsChangedHandler = { [weak self] results, _ in
-                if !results.isEmpty {
-                    ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
-                    self?.finish(true)
-                }
-            }
-            self.browser = b
-            
-            l?.start(queue: .main)
-            b.start(queue: .main)
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
-                self?.finish(true) // Fallback tiếp tục sau timeout
+    public func triggerPrompt() {
+        guard !isProbing else { return }
+        isProbing = true
+        
+        // Dùng tham số TCP chuẩn (KHÔNG có includePeerToPeer) để iOS kích hoạt popup mạng cục bộ
+        let params = NWParameters.tcp
+        
+        let l = try? NWListener(using: params)
+        l?.service = NWListener.Service(name: "AimHubProbe", type: probeType)
+        l?.newConnectionHandler = { $0.cancel() }
+        self.listener = l
+        
+        let b = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
+        b.stateUpdateHandler = { state in
+            if case .ready = state {
+                ContainerAccess.diag("[AirLift] Local Network NWBrowser state: ready")
             }
         }
+        b.browseResultsChangedHandler = { [weak self] results, _ in
+            if !results.isEmpty {
+                ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
+                self?.stop()
+            }
+        }
+        self.browser = b
+        
+        l?.start(queue: .main)
+        b.start(queue: .main)
     }
     
-    private func finish(_ authorized: Bool) {
-        guard let cont = continuation else { return }
-        continuation = nil
-        cont.resume(returning: authorized)
+    public func stop() {
+        guard isProbing else { return }
+        isProbing = false
         browser?.cancel()
         browser = nil
         listener?.cancel()
