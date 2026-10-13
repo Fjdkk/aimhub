@@ -74,7 +74,7 @@ final class AppState: ObservableObject {
             NotificationManager.shared.isEnabled = notificationsEnabled
         }
     }
-    @Published var isDNSProtected: Bool = DNSAntiManager.shared.isProtected {
+    @Published var isDNSProtected: Bool = false {
         didSet {
             if isDNSProtected != DNSAntiManager.shared.isProtected {
                 DNSAntiManager.shared.setProtection(enabled: isDNSProtected)
@@ -106,7 +106,6 @@ final class AppState: ObservableObject {
             language = .vietnamese
         }
         L10n.current = language
-        startFPSMonitor()
         if let saved = UserDefaults.standard.string(forKey: "activeBundleID") {
             loadActiveMods(for: saved)
         }
@@ -140,6 +139,8 @@ final class AppState: ObservableObject {
                 self?.log(message)
             }
         }
+        isDNSProtected = DNSAntiManager.shared.isProtected
+        startFPSMonitor()
         activeKey = KeyStorage.load()
         NotificationManager.shared.configure()
         checkVersion()
@@ -419,8 +420,8 @@ final class AppState: ObservableObject {
                     let maxSeconds = Double(self.sessionDurationMinutes()) * 60.0
                     if elapsed >= maxSeconds {
                         await MainActor.run {
-                            self.log("Đã hết 60 phút phiên sử dụng. Đang dọn dẹp và tự động thoát ứng dụng...", level: .warning)
-                            self.expireSession(autoExit: true)
+                            self.log("Đã hết thời gian phiên sử dụng. Đang dọn dẹp và kết thúc phiên.", level: .warning)
+                            self.expireSession()
                         }
                         break
                     }
@@ -440,7 +441,7 @@ final class AppState: ObservableObject {
                         if msg.contains("hết hạn") || msg.contains("không tồn tại") || msg.contains("thu hồi") {
                             await MainActor.run {
                                 self.log("Key đã hết hạn hoặc bị thu hồi trên máy chủ: \(msg)", level: .error)
-                                self.expireSession(autoExit: true)
+                                self.expireSession()
                             }
                             break
                         }
@@ -462,7 +463,7 @@ final class AppState: ObservableObject {
 
     private func checkBackgroundGap() {
         if let key = activeKey, key.isExpired {
-            expireSession(autoExit: true)
+            expireSession()
             return
         }
         
@@ -471,8 +472,8 @@ final class AppState: ObservableObject {
             let elapsed = Date().timeIntervalSince1970 - startAt
             let maxSeconds = Double(sessionDurationMinutes()) * 60.0
             if elapsed >= maxSeconds {
-                log("Đã hết 60 phút phiên sử dụng (\(Int(elapsed / 60)) phút). Đang dọn dẹp và tự động thoát ứng dụng.", level: .warning)
-                expireSession(autoExit: true)
+                log("Đã hết thời gian phiên sử dụng (\(Int(elapsed / 60)) phút). Kết thúc phiên.", level: .warning)
+                expireSession()
                 return
             }
         }
@@ -485,13 +486,13 @@ final class AppState: ObservableObject {
         let gone = Date().timeIntervalSince1970 - last
         if gone >= Double(sessionDurationMinutes()) * 60 {
             log("Đã rời app \(Int(gone / 60)) phút (vượt quá \(sessionDurationMinutes()) phút). Tự động kết thúc phiên.", level: .warning)
-            expireSession(autoExit: true)
+            expireSession()
             return
         }
         touchLastActive()
     }
 
-    private func expireSession(autoExit: Bool = false) {
+    private func expireSession() {
         log("Phiên hoạt động đã kết thúc hoặc key đã hết hạn (DNS Anti vẫn duy trì bảo vệ)")
         let bundleID = activeGame?.bundleID
             ?? UserDefaults.standard.string(forKey: "activeBundleID")
@@ -507,11 +508,6 @@ final class AppState: ObservableObject {
         UserDefaults.standard.removeObject(forKey: lastActiveKey)
         UserDefaults.standard.removeObject(forKey: sessionStartKey)
         stopHeartbeat()
-        if autoExit {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                exit(0)
-            }
-        }
     }
 
     func log(_ message: String, level: LogLevel = .info) {
