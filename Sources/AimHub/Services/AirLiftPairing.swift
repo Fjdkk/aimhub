@@ -422,29 +422,13 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             }
         }
         
-        self.state = .pairing(step: 1, total: 2, message: "Đang yêu cầu quyền Mạng cục bộ (Local Network)...")
+        self.state = .pairing(step: 1, total: 2, message: "Đang mở cổng ghép đôi Apple Developer Mode...")
         
-        Task { @MainActor [weak self] in
-            guard let self = self else { return }
-            
-            ContainerAccess.diag("[AirLift] ⏳ Đang kiểm tra quyền Mạng cục bộ qua NWBrowser probe...")
-            let authorized = await AirLiftLocalNetworkAuthorization.shared.request(timeout: 30)
-            guard authorized else {
-                self.isPairingInProgress = false
-                AirLiftPairingKeepAlive.shared.stop()
-                if self.bgTask != .invalid {
-                    UIApplication.shared.endBackgroundTask(self.bgTask)
-                    self.bgTask = .invalid
-                }
-                self.state = .failed("Cần cấp quyền Mạng cục bộ. Mở Cài đặt › AimHub Cheat › Mạng cục bộ (gạt BẬT) rồi thử lại.")
-                ContainerAccess.diag("[AirLift] ❌ Quyền Mạng cục bộ bị từ chối hoặc hết thời gian chờ.")
-                return
-            }
-            
-            ContainerAccess.diag("[AirLift] ✅ Đã xác nhận quyền Mạng cục bộ! Khởi chạy dịch vụ Bonjour...")
-            self.state = .pairing(step: 1, total: 2, message: "Đang mở cổng ghép đôi Apple Developer Mode...")
-            self.runHostServer()
-        }
+        // Kích hoạt thăm dò quyền mạng cục bộ ngầm (không chặn luồng ghép đôi)
+        AirLiftLocalNetworkAuthorization.shared.triggerPrompt()
+        
+        // Khởi chạy máy chủ ghép đôi ngay lập tức
+        self.runHostServer()
     }
     
     private func runHostServer() {
@@ -733,6 +717,30 @@ public final class AirLiftLocalNetworkAuthorization {
     private let probeType = "_stikpairprobe._tcp"
     
     private init() {}
+    
+    public func triggerPrompt() {
+        let params = NWParameters.tcp
+        params.includePeerToPeer = true
+        
+        let browser = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
+        browser.stateUpdateHandler = { [weak self] state in
+            if case .ready = state {
+                ContainerAccess.diag("[AirLift] Local Network NWBrowser state: ready")
+            }
+        }
+        browser.browseResultsChangedHandler = { [weak self] results, _ in
+            if !results.isEmpty {
+                ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
+            }
+        }
+        self.browser = browser
+        browser.start(queue: .main)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            self?.browser?.cancel()
+            self?.browser = nil
+        }
+    }
     
     public func request(timeout: TimeInterval = 30) async -> Bool {
         await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
