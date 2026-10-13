@@ -13,8 +13,8 @@ public final class AirLiftTransport {
     
     /// Ghi nội dung tệp vào container thông qua quyền AirLift AFC
     public func writeAppFile(data: Data, bundleID: String, relativePath: String, directPath: String? = nil) throws {
-        // 1. Thử ghi trực tiếp nếu có đường dẫn tuyệt đối
-        if let directPath = directPath {
+        // 1. Thử ghi trực tiếp nếu có đường dẫn tuyệt đối (bỏ qua nếu là kênh ảo AirLift)
+        if let directPath = directPath, !directPath.contains("AirLift-") && !AirLiftPairingStore.shared.isPaired {
             do {
                 let dir = (directPath as NSString).deletingLastPathComponent
                 try? POSIXFile.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -62,7 +62,7 @@ public final class AirLiftTransport {
     
     /// Xóa tệp qua AirLift AFC
     public func removeAppFile(bundleID: String, relativePath: String, directPath: String? = nil) throws {
-        if let directPath = directPath, POSIXFile.exists(directPath) {
+        if let directPath = directPath, !directPath.contains("AirLift-"), POSIXFile.exists(directPath) {
             try? POSIXFile.remove(directPath)
         }
         
