@@ -562,10 +562,11 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             port: port
         )
         service.delegate = self
+        service.includesPeerToPeer = true
         service.setTXTRecord(NetService.data(fromTXTRecord: txt))
         service.publish()
         self.netService = service
-        ContainerAccess.diag("[AirLift] 📡 Published Bonjour: \(serviceID) on port \(port) with \(txt.count) TXT keys.")
+        ContainerAccess.diag("[AirLift] 📡 Published Bonjour: \(serviceID) on port \(port) with \(txt.count) TXT keys (P2P enabled).")
     }
     
     fileprivate func stopAdvertising() {
