@@ -707,7 +707,6 @@ private func cString(_ ptr: UnsafeMutablePointer<CChar>?) -> String {
 
 // MARK: - Local Network Authorization Helper (StikPair Probe Standard for iOS 18)
 
-@MainActor
 public final class AirLiftLocalNetworkAuthorization {
     public static let shared = AirLiftLocalNetworkAuthorization()
     
@@ -719,65 +718,74 @@ public final class AirLiftLocalNetworkAuthorization {
     private init() {}
     
     public func triggerPrompt() {
-        let params = NWParameters.tcp
-        params.includePeerToPeer = true
-        
-        let browser = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
-        browser.stateUpdateHandler = { [weak self] state in
-            if case .ready = state {
-                ContainerAccess.diag("[AirLift] Local Network NWBrowser state: ready")
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            let params = NWParameters.tcp
+            params.includePeerToPeer = true
+            
+            let browser = NWBrowser(for: .bonjour(type: self.probeType, domain: nil), using: params)
+            browser.stateUpdateHandler = { state in
+                if case .ready = state {
+                    ContainerAccess.diag("[AirLift] Local Network NWBrowser state: ready")
+                }
             }
-        }
-        browser.browseResultsChangedHandler = { [weak self] results, _ in
-            if !results.isEmpty {
-                ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
+            browser.browseResultsChangedHandler = { results, _ in
+                if !results.isEmpty {
+                    ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
+                }
             }
-        }
-        self.browser = browser
-        browser.start(queue: .main)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
-            self?.browser?.cancel()
-            self?.browser = nil
+            self.browser = browser
+            browser.start(queue: .main)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+                self?.browser?.cancel()
+                self?.browser = nil
+            }
         }
     }
     
     public func request(timeout: TimeInterval = 30) async -> Bool {
         await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
-            self.continuation = cont
-            
-            let params = NWParameters.tcp
-            params.includePeerToPeer = true
-            
-            let listener = try? NWListener(using: params)
-            listener?.service = NWListener.Service(name: "AimHubProbe", type: probeType)
-            listener?.newConnectionHandler = { $0.cancel() }
-            listener?.stateUpdateHandler = { [weak self] state in
-                if case .failed = state {
-                    MainActor.assumeIsolated { self?.finish(false) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else {
+                    cont.resume(returning: false)
+                    return
                 }
-            }
-            self.listener = listener
-            
-            let browser = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
-            browser.stateUpdateHandler = { [weak self] state in
-                if case .failed = state {
-                    MainActor.assumeIsolated { self?.finish(false) }
+                self.continuation = cont
+                
+                let params = NWParameters.tcp
+                params.includePeerToPeer = true
+                
+                let listener = try? NWListener(using: params)
+                listener?.service = NWListener.Service(name: "AimHubProbe", type: self.probeType)
+                listener?.newConnectionHandler = { $0.cancel() }
+                listener?.stateUpdateHandler = { [weak self] state in
+                    if case .failed = state {
+                        self?.finish(false)
+                    }
                 }
-            }
-            browser.browseResultsChangedHandler = { [weak self] results, _ in
-                if !results.isEmpty {
-                    ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
-                    MainActor.assumeIsolated { self?.finish(true) }
+                self.listener = listener
+                
+                let browser = NWBrowser(for: .bonjour(type: self.probeType, domain: nil), using: params)
+                browser.stateUpdateHandler = { [weak self] state in
+                    if case .failed = state {
+                        self?.finish(false)
+                    }
                 }
-            }
-            self.browser = browser
-            
-            listener?.start(queue: .main)
-            browser.start(queue: .main)
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
-                MainActor.assumeIsolated { self?.finish(false) }
+                browser.browseResultsChangedHandler = { [weak self] results, _ in
+                    if !results.isEmpty {
+                        ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
+                        self?.finish(true)
+                    }
+                }
+                self.browser = browser
+                
+                listener?.start(queue: .main)
+                browser.start(queue: .main)
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                    self?.finish(false)
+                }
             }
         }
     }
