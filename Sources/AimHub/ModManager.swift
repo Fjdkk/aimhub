@@ -193,6 +193,14 @@ public final class ModManager {
     public func prepareContainer(bundleID: String) throws -> String {
         ContainerAccess.diag("[Container] Đang truy vấn container cho \(bundleID)...")
         let path = try ContainerAccess.shared.gameContainerPath(bundleID: bundleID)
+        
+        // Nếu là kênh AirLift RemotePairing, container được quản lý thông qua AFC tunnel (không bị giới hạn bởi POSIX sandbox)
+        if AirLiftPairingStore.shared.isPaired || path.contains("AirLift-") {
+            ContainerAccess.diag("[Container] ✅ Kênh AirLift AFC kích hoạt thành công cho \(bundleID) (Tunnel active)")
+            containerRoot = path
+            return path
+        }
+
         guard POSIXFile.isDirectory(path) else {
             ContainerAccess.diag("[Container] ❌ Path tìm được không phải thư mục: \(path)")
             throw ModManagerError.containerUnavailable

@@ -366,8 +366,12 @@ final class AppState: ObservableObject {
         if AppLauncher.isGameInstalled(bundleID: game.bundleID) {
             return true
         }
+        if AirLiftPairingStore.shared.isPaired {
+            return true
+        }
         do {
             let path = try ContainerAccess.shared.gameContainerPath(bundleID: game.bundleID)
+            if path.contains("AirLift-") { return true }
             var isDir: ObjCBool = false
             return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
         } catch {

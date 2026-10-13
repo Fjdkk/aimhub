@@ -124,9 +124,12 @@ public final class ContainerAccess {
             return rootPath
         }
 
-        // Tier 6: AirLift CoreDevice Tunnel
+        // Tier 6: AirLift CoreDevice Tunnel (RemotePairing / AFC)
         if AirLiftPairingStore.shared.isPaired {
-            Self.diag("AirLift Tunnel is paired and ready as active transport")
+            Self.diag("[Tier6] ✅ AirLift Tunnel đã ghép đôi thành công! Kích hoạt kênh truyền tải AFC cho \(bundleID)")
+            let rootPath = "/var/mobile/Containers/Data/Application/AirLift-\(bundleID)"
+            ContainerCacheStore.shared.setCachedPath(rootPath, for: bundleID)
+            return rootPath
         }
 
         Self.diag("[FAIL] ❌ Tất cả 6 tier đều thất bại cho \(bundleID) → Không tìm được container game")
