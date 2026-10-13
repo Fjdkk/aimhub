@@ -407,7 +407,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         guard !isPairingInProgress else { return }
         isPairingInProgress = true
         
-        // 1. Kích hoạt giữ nền
+        // 1. Kích hoạt giữ nền âm thanh
         AirLiftPairingKeepAlive.shared.start()
         
         if bgTask != .invalid {
@@ -422,17 +422,35 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             }
         }
         
-        self.state = .pairing(step: 1, total: 2, message: "Đang mở cổng ghép đôi Apple RemotePairing...")
+        self.state = .pairing(step: 1, total: 2, message: "Đang yêu cầu quyền Mạng cục bộ (Local Network)...")
         
-        // Kích hoạt thăm dò mạng ngầm song song (không await chặn luồng)
-        triggerLocalNetworkPrompt()
-        
-        // 2. Khởi chạy Rust FFI Server NGAY LẬP TỨC trên Background Thread
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            
+            ContainerAccess.diag("[AirLift] ⏳ Đang kiểm tra quyền Mạng cục bộ qua NWBrowser probe...")
+            let authorized = await AirLiftLocalNetworkAuthorization.shared.request(timeout: 30)
+            guard authorized else {
+                self.isPairingInProgress = false
+                AirLiftPairingKeepAlive.shared.stop()
+                if self.bgTask != .invalid {
+                    UIApplication.shared.endBackgroundTask(self.bgTask)
+                    self.bgTask = .invalid
+                }
+                self.state = .failed("Cần cấp quyền Mạng cục bộ. Mở Cài đặt › AimHub Cheat › Mạng cục bộ (gạt BẬT) rồi thử lại.")
+                ContainerAccess.diag("[AirLift] ❌ Quyền Mạng cục bộ bị từ chối hoặc hết thời gian chờ.")
+                return
+            }
+            
+            ContainerAccess.diag("[AirLift] ✅ Đã xác nhận quyền Mạng cục bộ! Khởi chạy dịch vụ Bonjour...")
+            self.state = .pairing(step: 1, total: 2, message: "Đang mở cổng ghép đôi Apple Developer Mode...")
+            self.runHostServer()
+        }
+    }
+    
+    private func runHostServer() {
         let outPath = Self.pairingFilePath()
         let bindAddr = "0.0.0.0"
-        let hostName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String 
-            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String 
-            ?? "AimHub"
+        let hostName = "AimHub"
         let hostModel = "Mac17,7"
         let fallbackName = UIDevice.current.name
         let fallbackUDID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
@@ -443,7 +461,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
             let ctx = UnsafeMutableRawPointer(bitPattern: ctxBits)
             var result = StikPairResult()
             
-            ContainerAccess.diag("[AirLift] Starting stikpair_run_host on \(bindAddr) instantly...")
+            ContainerAccess.diag("[AirLift] Starting stikpair_run_host on \(bindAddr) for host '\(hostName)'...")
             
             let rc = bindAddr.withCString { bindC in
                 hostName.withCString { nameC in
@@ -545,10 +563,9 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
         )
         service.delegate = self
         service.setTXTRecord(NetService.data(fromTXTRecord: txt))
-        service.schedule(in: .main, forMode: .common)
         service.publish()
         self.netService = service
-        ContainerAccess.diag("[AirLift] 📡 Published Bonjour: \(serviceID) on port \(port) with \(txt.count) TXT keys (RunLoop common modes scheduled).")
+        ContainerAccess.diag("[AirLift] 📡 Published Bonjour: \(serviceID) on port \(port) with \(txt.count) TXT keys.")
     }
     
     fileprivate func stopAdvertising() {
@@ -605,7 +622,9 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     }
     
     public func triggerLocalNetworkPrompt() {
-        AirLiftLocalNetworkAuthorization.shared.triggerPrompt()
+        Task { @MainActor in
+            _ = await AirLiftLocalNetworkAuthorization.shared.request()
+        }
     }
     
     public func resetPairing() {
@@ -701,53 +720,63 @@ private func cString(_ ptr: UnsafeMutablePointer<CChar>?) -> String {
     return String(cString: ptr)
 }
 
-// MARK: - Local Network Authorization Helper (Standard TCP for iOS 18)
+// MARK: - Local Network Authorization Helper (StikPair Probe Standard for iOS 18)
 
-public final class AirLiftLocalNetworkAuthorization: NSObject, NetServiceDelegate, NetServiceBrowserDelegate {
+@MainActor
+public final class AirLiftLocalNetworkAuthorization {
     public static let shared = AirLiftLocalNetworkAuthorization()
     
     private var browser: NWBrowser?
     private var listener: NWListener?
-    private var isProbing: Bool = false
-    private let probeType = "_aimhub._tcp"
+    private var continuation: CheckedContinuation<Bool, Never>?
+    private let probeType = "_stikpairprobe._tcp"
     
-    private override init() {
-        super.init()
-    }
+    private init() {}
     
-    public func triggerPrompt() {
-        guard !isProbing else { return }
-        isProbing = true
-        
-        // Dùng tham số TCP chuẩn (KHÔNG có includePeerToPeer) để iOS kích hoạt popup mạng cục bộ
-        let params = NWParameters.tcp
-        
-        let l = try? NWListener(using: params)
-        l?.service = NWListener.Service(name: "AimHubProbe", type: probeType)
-        l?.newConnectionHandler = { $0.cancel() }
-        self.listener = l
-        
-        let b = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
-        b.stateUpdateHandler = { state in
-            if case .ready = state {
-                ContainerAccess.diag("[AirLift] Local Network NWBrowser state: ready")
+    public func request(timeout: TimeInterval = 30) async -> Bool {
+        await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            self.continuation = cont
+            
+            let params = NWParameters.tcp
+            params.includePeerToPeer = true
+            
+            let listener = try? NWListener(using: params)
+            listener?.service = NWListener.Service(name: "AimHubProbe", type: probeType)
+            listener?.newConnectionHandler = { $0.cancel() }
+            listener?.stateUpdateHandler = { [weak self] state in
+                if case .failed = state {
+                    MainActor.assumeIsolated { self?.finish(false) }
+                }
+            }
+            self.listener = listener
+            
+            let browser = NWBrowser(for: .bonjour(type: probeType, domain: nil), using: params)
+            browser.stateUpdateHandler = { [weak self] state in
+                if case .failed = state {
+                    MainActor.assumeIsolated { self?.finish(false) }
+                }
+            }
+            browser.browseResultsChangedHandler = { [weak self] results, _ in
+                if !results.isEmpty {
+                    ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
+                    MainActor.assumeIsolated { self?.finish(true) }
+                }
+            }
+            self.browser = browser
+            
+            listener?.start(queue: .main)
+            browser.start(queue: .main)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                MainActor.assumeIsolated { self?.finish(false) }
             }
         }
-        b.browseResultsChangedHandler = { [weak self] results, _ in
-            if !results.isEmpty {
-                ContainerAccess.diag("[AirLift] Local Network probe discovered peer -> Permission active!")
-                self?.stop()
-            }
-        }
-        self.browser = b
-        
-        l?.start(queue: .main)
-        b.start(queue: .main)
     }
     
-    public func stop() {
-        guard isProbing else { return }
-        isProbing = false
+    private func finish(_ authorized: Bool) {
+        guard let cont = continuation else { return }
+        continuation = nil
+        cont.resume(returning: authorized)
         browser?.cancel()
         browser = nil
         listener?.cancel()

@@ -146,17 +146,34 @@ public struct AirLiftSetupView: View {
             // Live Pairing Status Card
             switch controller.state {
             case .pairing(let step, let total, let message):
-                HStack(spacing: 12) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: Theme.accent))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Đang ghép đôi (Bước \(step)/\(total))")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(Theme.accent)
-                        Text(message)
-                            .font(.system(size: 11))
-                            .foregroundColor(Theme.muted)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: Theme.accent))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Đang mở ghép đôi (Bước \(step)/\(total))")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(Theme.accent)
+                            Text(message)
+                                .font(.system(size: 11))
+                                .foregroundColor(Theme.muted)
+                        }
                     }
+                    
+                    Divider().background(Theme.border)
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Các bước thực hiện trên iPhone:")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text("1. Mở ứng dụng **Cài đặt** (Settings)")
+                        Text("2. Chọn **Quyền riêng tư & Bảo mật** › **Chế độ nhà phát triển**")
+                        Text("3. Cuộn xuống dưới cùng, nhấn **Ghép đôi với AimHub**")
+                        Text("4. Nhập mã PIN 6 số xuất hiện trên màn hình hoặc biểu ngữ thông báo")
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(Theme.muted)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -164,17 +181,27 @@ public struct AirLiftSetupView: View {
                 .cornerRadius(12)
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.accent.opacity(0.3), lineWidth: 1))
             case .pinRequired(let pin):
-                HStack(spacing: 10) {
-                    Image(systemName: "key.fill")
+                VStack(spacing: 8) {
+                    Text("Nhập mã này vào Cài đặt Nhà phát triển:")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Theme.muted)
+                    Text(pin)
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundColor(Theme.accent)
-                    Text("Mã PIN ghép đôi: \(pin)")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Theme.accent)
+                        .tracking(6)
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("Đang chờ thiết bị xác nhận...")
+                            .font(.system(size: 11))
+                            .foregroundColor(Theme.muted)
+                    }
                 }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .frame(maxWidth: .infinity)
                 .background(Theme.accent.opacity(0.12))
                 .cornerRadius(12)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.accent.opacity(0.3), lineWidth: 1))
             case .success:
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
@@ -188,12 +215,24 @@ public struct AirLiftSetupView: View {
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(12)
             case .failed(let reason):
-                HStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red)
-                    Text("Thất bại: \(reason)")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.red)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                        Text("Thất bại: \(reason)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.red)
+                    }
+                    if reason.contains("Mạng cục bộ") {
+                        Button("Mở Cài đặt để bật Mạng cục bộ") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.orange)
+                        .padding(.top, 2)
+                    }
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -205,10 +244,6 @@ public struct AirLiftSetupView: View {
 
             Button {
                 controller.startPairing()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    alertMessage = "Đã mở cổng Ghép Đôi\nVui lòng ghép đôi với thiết bị của bạn với AimHub Cheat"
-                    showAlert = true
-                }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "link")
