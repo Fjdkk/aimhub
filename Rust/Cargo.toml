@@ -18,7 +18,7 @@ idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "7bd551c16c6d
   "aws-lc",
 ] }
 
-tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "fs", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "fs", "io-util", "time"] }
 
 [profile.release]
 opt-level = 3

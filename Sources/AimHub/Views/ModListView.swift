@@ -577,7 +577,8 @@ struct ModListView: View {
         errorText = nil
 
         if appState.isModActive(ruleID: rule.ruleID) {
-            Task {
+            Task { @MainActor in
+                defer { busyModID = nil }
                 do {
                     try await appState.turnOffMod(rule)
                     let dest = rule.destination ?? ""
@@ -599,11 +600,10 @@ struct ModListView: View {
                             try ModManager.shared.installMod(entry, bundleID: game.bundleID, mode: "inject")
                         }
                     }
-                    busyModID = nil
                     showToast(String(format: L10n.t("mod.off"), rule.name))
                 } catch {
-                    busyModID = nil
                     errorText = error.localizedDescription
+                    showToast(error.localizedDescription, ok: false)
                     if !AirLiftPairingStore.shared.isPaired {
                         showPairingPrompt = true
                     }
@@ -612,7 +612,8 @@ struct ModListView: View {
             return
         }
 
-        Task {
+        Task { @MainActor in
+            defer { busyModID = nil }
             do {
                 // Tự động tắt bất kỳ mod nào cùng nhóm xung đột (vd: đổi giữa Aim Legit, Aim Lock, Aim Scope, Aim Silent)
                 let isAimExclusive = (rule.slot == "aim_legit" || rule.slot == "aim_lock" || rule.slot == "aim_on_scope" || rule.slot == "aim_silent")
@@ -627,11 +628,10 @@ struct ModListView: View {
 
                 let modEntry = try await buildModEntry(rule, game: game)
                 try await appState.installMod(modEntry, rule: rule)
-                busyModID = nil
                 showToast(String(format: L10n.t("mod.on"), rule.name))
             } catch {
-                busyModID = nil
                 errorText = error.localizedDescription
+                showToast(error.localizedDescription, ok: false)
                 if !AirLiftPairingStore.shared.isPaired {
                     showPairingPrompt = true
                 }
@@ -642,23 +642,19 @@ struct ModListView: View {
     private func resetAll() {
         guard busyModID == nil else { return }
         busyModID = "reset"
-        Task {
+        Task { @MainActor in
+            defer { busyModID = nil }
             do {
                 try await appState.restoreAll()
-                await MainActor.run {
-                    if let game = appState.activeGame {
-                        ModManager.shared.neutralizePatch(bundleID: game.bundleID)
-                    }
-                    busyModID = nil
-                    showToast(L10n.t("mod.allRestored"))
+                if let game = appState.activeGame {
+                    ModManager.shared.neutralizePatch(bundleID: game.bundleID)
                 }
+                showToast(L10n.t("mod.allRestored"))
             } catch {
-                await MainActor.run {
-                    busyModID = nil
-                    errorText = error.localizedDescription
-                    if !AirLiftPairingStore.shared.isPaired {
-                        showPairingPrompt = true
-                    }
+                errorText = error.localizedDescription
+                showToast(error.localizedDescription, ok: false)
+                if !AirLiftPairingStore.shared.isPaired {
+                    showPairingPrompt = true
                 }
             }
         }

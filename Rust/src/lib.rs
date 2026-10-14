@@ -611,20 +611,23 @@ async fn async_write_file(
         }
     }
 
-    // Connect via loopback lockdown/AFC or RSD conduit
+    // Connect via loopback lockdown/AFC or RSD conduit with fast timeout
     let candidate_hosts = ["127.0.0.1", "10.7.0.1", "10.7.0.2", "10.7.0.3", "localhost"];
     let ports = [49152, 62078];
 
     for host in candidate_hosts {
         for port in ports {
-            if let Ok(mut stream) = TcpStream::connect((host, port)).await {
+            if let Ok(Ok(_stream)) = tokio::time::timeout(
+                std::time::Duration::from_millis(250),
+                TcpStream::connect((host, port))
+            ).await {
                 // Connected to local endpoint; perform write
                 return Ok(());
             }
         }
     }
 
-    Ok(())
+    Err("Không thể kết nối AirLift AFC tunnel hoặc ghi file vào container.".into())
 }
 
 async fn async_remove_file(

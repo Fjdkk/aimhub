@@ -194,17 +194,18 @@ public final class ModManager {
         ContainerAccess.diag("[Container] Đang truy vấn container cho \(bundleID)...")
         let path = try ContainerAccess.shared.gameContainerPath(bundleID: bundleID)
         
-        // Nếu là kênh AirLift RemotePairing, container được quản lý thông qua AFC tunnel (không bị giới hạn bởi POSIX sandbox)
+        containerRoot = path
+
+        // Nếu là kênh AirLift RemotePairing hoặc đường dẫn ảo AirLift
         if AirLiftPairingStore.shared.isPaired || path.contains("AirLift-") {
             ContainerAccess.diag("[Container] ✅ Kênh AirLift AFC kích hoạt thành công cho \(bundleID) (Tunnel active)")
-            containerRoot = path
             return path
         }
 
-        guard POSIXFile.isDirectory(path) else {
-            ContainerAccess.diag("[Container] ❌ Path tìm được không phải thư mục: \(path)")
-            throw ModManagerError.containerUnavailable
+        if !POSIXFile.isDirectory(path) {
+            ContainerAccess.diag("[Container] ⚠️ Không thể stat thư mục bằng POSIX (bị sandbox hạn chế): \(path)")
         }
+
         // Kiểm tra quyền ghi thực tế vào thư mục Documents của container
         let docsPath = (path as NSString).appendingPathComponent("Documents")
         try? POSIXFile.createDirectory(atPath: docsPath, withIntermediateDirectories: true)
@@ -217,12 +218,11 @@ public final class ModManager {
         } else {
             let errNo = errno
             let errMsg = String(cString: strerror(errNo)!)
-            ContainerAccess.diag("[Container] ⚠️ Container tìm được nhưng KHÔNG CÓ QUYỀN GHI: errno=\(errNo) (\(errMsg))")
+            ContainerAccess.diag("[Container] ⚠️ Container tìm được nhưng KHÔNG CÓ QUYỀN GHI POSIX: errno=\(errNo) (\(errMsg))")
             if errNo == EPERM {
                 ContainerAccess.diag("[Container] ⚠️ EPERM → Sandbox extension chưa activate hoặc bị iOS thu hồi")
             }
         }
-        containerRoot = path
         return path
     }
 
