@@ -23,6 +23,7 @@ public final class FFAntiBanService: ObservableObject {
         "Documents/report",
         "Documents/analytics",
         "Documents/crash_dump",
+        "Documents/crash",
         "Documents/beacon",
         "Documents/feedback",
         "Documents/GCloud",
@@ -38,10 +39,17 @@ public final class FFAntiBanService: ObservableObject {
         "Documents/oss_log",
         "Documents/upload",
         "Documents/pending_reports",
-        "Documents/com.tencent.bugly"
+        "Documents/com.tencent.bugly",
+        "Documents/bugly",
+        "Documents/APLog",
+        "Documents/tdlog",
+        "Documents/tlog",
+        "Documents/xlog",
+        "Documents/log"
     ]
 
     private let cacheFolders: [String] = [
+        "tmp",
         "Library/Caches/Analytics",
         "Library/Caches/CrashReporter",
         "Library/Caches/com.crashlytics.data",
@@ -53,7 +61,9 @@ public final class FFAntiBanService: ObservableObject {
         "Library/Caches/adjust-sdk",
         "Library/Caches/bugly",
         "Library/Caches/com.tencent.bugly",
-        "Library/Caches/Snapshots"
+        "Library/Caches/Snapshots",
+        "Library/Cookies",
+        "Library/WebKit"
     ]
 
     private let integrityFiles: [String] = [
