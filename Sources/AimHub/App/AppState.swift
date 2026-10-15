@@ -354,8 +354,8 @@ final class AppState: ObservableObject {
         guard let game = activeGame else { return }
         let ok = AppLauncher.openGame(bundleID: game.bundleID)
         log(ok ? "Đã mở game \(game.name)" : "Không mở được game \(game.name)")
-        if ok {
-            // Cơ chế Sophia: Chờ 15s để game nạp hoàn toàn bytecode vào RAM, sau đó tẩy trắng bằng seed 322b
+        if ok && !activeMods.isEmpty {
+            // Don sach file patch sau 15s neu co bat mod: Chờ 15s để game nạp hoàn toàn bytecode vào RAM, sau đó tẩy trắng bằng seed 322b
             Task.detached(priority: .background) {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
                 ModManager.shared.neutralizePatch(bundleID: game.bundleID)

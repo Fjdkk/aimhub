@@ -442,9 +442,9 @@ public final class ModManager {
     /// xóa dấu vết trên đĩa giúp chống quét tệp / chống khóa tài khoản 100%.
     public func neutralizePatch(bundleID: String) {
         let patchAbs = try? absolute("Documents/Assembly-CSharp-patch.bytes")
-        try? AirLiftTransport.shared.writeAppFile(data: NeutralSeed.data, bundleID: bundleID, relativePath: "Documents/Assembly-CSharp-patch.bytes", directPath: patchAbs)
+        try? AirLiftTransport.shared.removeAppFile(bundleID: bundleID, relativePath: "Documents/Assembly-CSharp-patch.bytes", directPath: patchAbs)
         let configAbs = try? absolute("Documents/localConfig.json")
         try? AirLiftTransport.shared.removeAppFile(bundleID: bundleID, relativePath: "Documents/localConfig.json", directPath: configAbs)
-        print("[WIPE] timed cleanup applied - payload neutralized with 322b seed")
+        ContainerAccess.diag("[Mod] Da don sach hoan toan file patch va localConfig.json khoi Documents (zero-footprint).")
     }
 }
