@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject private var dnsManager = DNSAntiManager.shared
+    @ObservedObject private var antiBanService = FFAntiBanService.shared
     @State private var showAbout = false
     @State private var toastText: String?
     @State private var toastOK = true
@@ -165,6 +166,53 @@ struct HomeView: View {
                         Image(systemName: dnsManager.isProtected ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundColor(dnsManager.isProtected ? Theme.green : Theme.red)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            Rectangle()
+                .fill(Theme.border.opacity(0.7))
+                .frame(height: 1)
+                .padding(.vertical, 2)
+
+            Button {
+                handleAntiBanTap()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(antiBanService.isAntiBanActive ? Theme.green.opacity(0.15) : Theme.accent.opacity(0.15))
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(antiBanService.isAntiBanActive ? Theme.green.opacity(0.5) : Theme.accent.opacity(0.5), lineWidth: 1)
+                            )
+                        Image(systemName: "lock.shield.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(antiBanService.isAntiBanActive ? Theme.green : Theme.accent)
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Extreme Anti-Ban")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Theme.text)
+                        HStack(spacing: 6) {
+                            Text(antiBanService.isAntiBanActive ? "Delta Isolation LIVE" : (antiBanService.isActivating ? antiBanService.currentStepText : "Sẵn sàng bảo vệ"))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(antiBanService.isAntiBanActive ? Theme.green : Theme.muted)
+                        }
+                    }
+
+                    Spacer()
+
+                    if antiBanService.isActivating {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: antiBanService.isAntiBanActive ? "checkmark.circle.fill" : "bolt.shield.fill")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(antiBanService.isAntiBanActive ? Theme.green : Theme.accent)
                     }
                 }
             }
@@ -354,6 +402,21 @@ struct HomeView: View {
         guard let game = appState.activeGame else { return 0 }
         let rules = game.projects?.first?.rules?.count
         return rules ?? 0
+    }
+
+    private func handleAntiBanTap() {
+        let bundleID = appState.activeGame?.bundleID ?? GameBundleID.freeFireMax
+        if antiBanService.isAntiBanActive {
+            showToast("🛡️ Delta Isolation đang bảo vệ LIVE (17 Telemetry + 11 Caches đã khóa)", ok: true)
+        } else {
+            showToast("⚡ Đang thanh tẩy Telemetry & Content Caches...", ok: true)
+            let directContainer = try? ContainerAccess.shared.gameContainerPath(bundleID: bundleID)
+            antiBanService.purgeTelemetryAndIntegrity(bundleID: bundleID, directContainer: directContainer)
+            antiBanService.normalizeMetadata(bundleID: bundleID, directContainer: directContainer)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                self.showToast("🛡️ Đã cô lập Sandbox thành công! Sẵn sàng vào game.", ok: true)
+            }
+        }
     }
 
     private func handleDNSTap() {

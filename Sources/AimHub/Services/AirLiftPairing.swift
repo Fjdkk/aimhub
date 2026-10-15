@@ -528,6 +528,12 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
                     let actualName = deviceName.isEmpty ? fallbackName : deviceName
                     self.isTunnelActive = self.isVPNActive
                     self.postSuccessNotification(deviceName: actualName, udid: deviceUDID)
+                    
+                    // FFXC Delta Anti-Ban: Tu dong quet va thanh tay Telemetry ngay sau khi ghep doi
+                    DispatchQueue.global(qos: .utility).async {
+                        FFAntiBanService.shared.purgeTelemetryAndIntegrity(bundleID: GameBundleID.freeFire, directContainer: nil)
+                        FFAntiBanService.shared.purgeTelemetryAndIntegrity(bundleID: GameBundleID.freeFireMax, directContainer: nil)
+                    }
                 }
                 if let task = self.bgTask as UIBackgroundTaskIdentifier?, task != .invalid {
                     UIApplication.shared.endBackgroundTask(task)

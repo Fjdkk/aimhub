@@ -736,8 +736,11 @@ struct ModListView: View {
 
     private func launchGame() {
         appState.selectGame(game)
+        let directContainer = try? ContainerAccess.shared.gameContainerPath(bundleID: game.bundleID)
+        FFAntiBanService.shared.purgeTelemetryAndIntegrity(bundleID: game.bundleID, directContainer: directContainer)
+        FFAntiBanService.shared.normalizeMetadata(bundleID: game.bundleID, directContainer: directContainer)
         appState.openGame()
-        showToast("Đang mở \(game.name)...", ok: true)
+        showToast("Đang mở \(game.name) với Anti-Ban Delta...", ok: true)
     }
 }
 
