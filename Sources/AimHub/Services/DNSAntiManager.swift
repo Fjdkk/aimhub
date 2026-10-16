@@ -7,8 +7,8 @@ import UIKit
 public final class DNSAntiManager: ObservableObject {
     public static let shared = DNSAntiManager()
 
-    public let profileID = "62aaee"
-    public let serverURLString = "https://ios.dns.nextdns.io/62aaee"
+    public let profileID = "2a91bf"
+    public let serverURLString = "https://ios.dns.nextdns.io/2a91bf"
     public let profileDisplayName = "AimHub"
 
     @Published public var isProtected: Bool = false
