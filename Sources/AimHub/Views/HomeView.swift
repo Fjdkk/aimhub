@@ -440,21 +440,21 @@ struct HomeView: View {
         return rules ?? 0
     }
 
-    private func handleAntiBanTap() {
+    private func handleAntiBanClean() {
         let bundleID = appState.activeGame?.bundleID ?? GameBundleID.freeFireMax
-        if antiBanService.isAntiBanActive {
-            showToast("🛡️ Delta Isolation đang bảo vệ LIVE (17 Telemetry + 11 Caches đã khóa)", ok: true)
-        } else {
-            showToast("⚡ Đang thanh tẩy Telemetry & Content Caches...", ok: true)
-            let directContainer = try? ContainerAccess.shared.gameContainerPath(bundleID: bundleID)
-            antiBanService.purgeTelemetryAndIntegrity(bundleID: bundleID, directContainer: directContainer)
-            antiBanService.normalizeMetadata(bundleID: bundleID, directContainer: directContainer)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                self.showToast("🛡️ Đã cô lập Sandbox thành công! Sẵn sàng vào game.", ok: true)
+        showAntiBanLogs = true
+        showToast("⚡ Đang dọn dẹp Telemetry & Caches...", ok: true)
+        antiBanService.runAntiBanV2PreClean(bundleID: bundleID) { success in
+            if success {
+                self.showToast("🛡️ Đã dọn sạch & Khóa log thành công! Sẵn sàng vào game.", ok: true)
             }
         }
     }
 
+    private func handleAntiBanTap() {
+        handleAntiBanClean()
+    }
+    
     private func handleDNSTap() {
         Task {
             await dnsManager.verifyStatus()
