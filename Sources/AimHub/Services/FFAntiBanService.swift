@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import Combine
 import Darwin
 
@@ -312,5 +312,56 @@ public final class FFAntiBanService: ObservableObject {
             purgeTarget(relPath: target, bundleID: bundleID, directContainer: directContainer, lockFolder: false)
         }
         appendLog("Da xoa sach session token & cookies cu de game nhan thiet bi sach 100%.")
+    }
+
+    // MARK: - Pre-Clean Doc Lap (AntiBan V2)
+    public func runAntiBanV2PreClean(bundleID: String, completion: @escaping (Bool) -> Void) {
+        DispatchQueue.main.async {
+            self.isActivating = true
+            self.currentStepText = "Dang don dep..."
+            self.logs.removeAll()
+            self.appendLog("=== KHOI DONG ANTIBAN V2 (DELTA ISOLATION) ===")
+            self.appendLog("Muc tieu Bundle: \(bundleID)")
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let directContainer = try? ContainerAccess.shared.gameContainerPath(bundleID: bundleID)
+            
+            self.appendLog("[1/3] Quet 26 thu muc telemetry (APLog, tdlog, bugly, xlog, crash, report)...")
+            var purgedTelemetryCount = 0
+            for rel in self.telemetryFolders {
+                self.purgeTarget(relPath: rel, bundleID: bundleID, directContainer: directContainer, lockFolder: true)
+                purgedTelemetryCount += 1
+            }
+            self.appendLog("  -> Hoan tat xu ly \(purgedTelemetryCount) thu muc telemetry va khoa quyen ghi (chmod 0444).")
+
+            self.appendLog("[2/3] Don dep 15 thu muc cache va 9 file hash contentcache...")
+            var purgedCacheCount = 0
+            for rel in self.cacheFolders {
+                self.purgeTarget(relPath: rel, bundleID: bundleID, directContainer: directContainer, lockFolder: false)
+                purgedCacheCount += 1
+            }
+            for rel in self.integrityFiles {
+                self.purgeTarget(relPath: rel, bundleID: bundleID, directContainer: directContainer, lockFolder: false)
+                purgedCacheCount += 1
+            }
+            self.appendLog("  -> Da triet ha \(purgedCacheCount) muc cache & hash kiem tra gian lan.")
+
+            self.appendLog("[3/3] Chuan hoa Container Metadata Timestamp...")
+            self.normalizeMetadata(bundleID: bundleID, directContainer: directContainer)
+            self.appendLog("  -> Da dong bo timestamp khop voi metadata goc cua iOS.")
+
+            self.appendLog("=== HOAN TAT: DON DEP SACH 100% ===")
+            self.appendLog("Thiet bi da o trang thai tang hinh. San sang vao game!")
+
+            DispatchQueue.main.async {
+                self.isActivating = false
+                self.isAntiBanActive = true
+                self.currentStepText = "Da don sach & Khoa log (LIVE)"
+                UserDefaults.standard.set(true, forKey: "aimhub_antiban_active")
+                completion(true)
+            }
+        }
     }
 }

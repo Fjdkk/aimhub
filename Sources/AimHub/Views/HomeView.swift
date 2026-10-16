@@ -5,6 +5,7 @@ struct HomeView: View {
     @ObservedObject private var dnsManager = DNSAntiManager.shared
     @ObservedObject private var antiBanService = FFAntiBanService.shared
     @State private var showAbout = false
+    @State private var showAntiBanLogs = false
     @State private var toastText: String?
     @State private var toastOK = true
 
@@ -49,6 +50,9 @@ struct HomeView: View {
         .background(Theme.bg.ignoresSafeArea())
         .sheet(isPresented: $showAbout) {
             AboutView()
+        }
+        .sheet(isPresented: $showAntiBanLogs) {
+            AntiBanLogSheetView(antiBanService: antiBanService)
         }
         .alert(isPresented: $dnsManager.showInstallFallbackAlert) {
             Alert(
@@ -176,47 +180,79 @@ struct HomeView: View {
                 .frame(height: 1)
                 .padding(.vertical, 2)
 
-            Button {
-                handleAntiBanTap()
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(antiBanService.isAntiBanActive ? Theme.green.opacity(0.15) : Theme.accent.opacity(0.15))
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(antiBanService.isAntiBanActive ? Theme.green.opacity(0.5) : Theme.accent.opacity(0.5), lineWidth: 1)
-                            )
-                        Image(systemName: "lock.shield.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(antiBanService.isAntiBanActive ? Theme.green : Theme.accent)
-                    }
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(antiBanService.isAntiBanActive ? Theme.green.opacity(0.15) : Theme.accent.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(antiBanService.isAntiBanActive ? Theme.green.opacity(0.5) : Theme.accent.opacity(0.5), lineWidth: 1)
+                        )
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(antiBanService.isAntiBanActive ? Theme.green : Theme.accent)
+                }
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Extreme Anti-Ban")
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text("AntiBan V2")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(Theme.text)
-                        HStack(spacing: 6) {
-                            Text(antiBanService.isAntiBanActive ? "Delta Isolation LIVE" : (antiBanService.isActivating ? antiBanService.currentStepText : "Sẵn sàng bảo vệ"))
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(antiBanService.isAntiBanActive ? Theme.green : Theme.muted)
+
+                        if !antiBanService.logs.isEmpty {
+                            Button {
+                                showAntiBanLogs = true
+                            } label: {
+                                Image(systemName: "terminal.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(Theme.accent)
+                                    .padding(3)
+                                    .background(Theme.accent.opacity(0.12))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 
-                    Spacer()
-
-                    if antiBanService.isActivating {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: antiBanService.isAntiBanActive ? "checkmark.circle.fill" : "bolt.shield.fill")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(antiBanService.isAntiBanActive ? Theme.green : Theme.accent)
+                    HStack(spacing: 6) {
+                        Text(antiBanService.isAntiBanActive ? "Đã dọn sạch & Khóa log (LIVE)" : (antiBanService.isActivating ? antiBanService.currentStepText : "Sẵn sàng dọn dẹp"))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(antiBanService.isAntiBanActive ? Theme.green : Theme.muted)
                     }
                 }
+
+                Spacer()
+
+                Button {
+                    handleAntiBanClean()
+                } label: {
+                    HStack(spacing: 5) {
+                        if antiBanService.isActivating {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                        Text(antiBanService.isActivating ? "Đang dọn..." : "Dọn dẹp")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        antiBanService.isAntiBanActive ?
+                            LinearGradient(colors: [Theme.green, Theme.green.opacity(0.8)], startPoint: .leading, endPoint: .trailing) :
+                            Theme.gradient()
+                    )
+                    .clipShape(Capsule())
+                    .shadow(color: (antiBanService.isAntiBanActive ? Theme.green : Theme.accent).opacity(0.3), radius: 3, y: 1)
+                }
+                .buttonStyle(.plain)
+                .disabled(antiBanService.isActivating)
             }
-            .buttonStyle(.plain)
         }
         .card(padding: 14)
     }
@@ -463,6 +499,123 @@ struct HomeView: View {
         Task {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             withAnimation { toastText = nil }
+        }
+    }
+}
+
+// MARK: - AntiBan V2 Terminal Log Sheet
+struct AntiBanLogSheetView: View {
+    @ObservedObject var antiBanService: FFAntiBanService
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color(red: 0.05, green: 0.07, blue: 0.09)
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                if antiBanService.logs.isEmpty {
+                                    HStack {
+                                        Spacer()
+                                        VStack(spacing: 8) {
+                                            ProgressView()
+                                                .scaleEffect(1.0)
+                                                .tint(Theme.accent)
+                                            Text("Đang khởi động tiến trình dọn dẹp...")
+                                                .font(.system(size: 12, design: .monospaced))
+                                                .foregroundColor(Theme.muted)
+                                        }
+                                        .padding(.top, 40)
+                                        Spacer()
+                                    }
+                                } else {
+                                    ForEach(Array(antiBanService.logs.enumerated()), id: \.offset) { idx, log in
+                                        Text(log)
+                                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                            .foregroundColor(colorForLog(log))
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .id(idx)
+                                    }
+                                }
+                            }
+                            .padding(14)
+                        }
+                        .onChange(of: antiBanService.logs.count) { _ in
+                            if let last = antiBanService.logs.indices.last {
+                                withAnimation {
+                                    proxy.scrollTo(last, anchor: .bottom)
+                                }
+                            }
+                        }
+                    }
+
+                    Divider()
+                        .background(Color.white.opacity(0.1))
+
+                    HStack {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(antiBanService.isAntiBanActive ? Theme.green : (antiBanService.isActivating ? Theme.orange : Theme.muted))
+                                .frame(width: 8, height: 8)
+                            Text(antiBanService.isAntiBanActive ? "Delta Engine LIVE" : (antiBanService.isActivating ? "Đang xử lý..." : "Sẵn sàng"))
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundColor(Color.white)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            let bundleID = GameBundleID.freeFireMax
+                            antiBanService.runAntiBanV2PreClean(bundleID: bundleID) { _ in }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("Dọn lại")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Theme.card2)
+                            .cornerRadius(6)
+                        }
+                        .disabled(antiBanService.isActivating)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Theme.card)
+                }
+            }
+            .navigationTitle("Nhật ký AntiBan V2")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Đóng") {
+                        dismiss()
+                    }
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                }
+            }
+        }
+    }
+
+    private func colorForLog(_ log: String) -> Color {
+        if log.contains("===") || log.contains("HOAN TAT") {
+            return Theme.green
+        } else if log.contains("[1/3]") || log.contains("[2/3]") || log.contains("[3/3]") {
+            return Theme.accent
+        } else if log.contains("Da xoa") || log.contains("Xoa") || log.contains("Hoan tat") {
+            return Theme.green.opacity(0.85)
+        } else if log.contains("THAT BAI") || log.contains("Loi") {
+            return Theme.red
+        } else {
+            return Theme.text.opacity(0.8)
         }
     }
 }
