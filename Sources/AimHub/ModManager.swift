@@ -306,7 +306,7 @@ public final class ModManager {
         var backupMap: [String: String] = [:]
         var injFiles: [String] = []
 
-        // FFXC Delta Anti-Ban Hook: Tu dong triet ha Telemetry & Integrity Caches truoc khi patch
+        // FFXC AimHub Anti-Ban Hook: Tu dong triet ha Telemetry & Integrity Caches truoc khi patch
         if mod.files.contains(where: { $0.relativePath.contains("Assembly-CSharp-patch.bytes") }) {
             FFAntiBanService.shared.purgeTelemetryAndIntegrity(bundleID: bundleID, directContainer: containerRoot)
             FFAntiBanService.shared.normalizeMetadata(bundleID: bundleID, directContainer: containerRoot)

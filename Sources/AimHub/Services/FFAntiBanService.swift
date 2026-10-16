@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import Darwin
 
-/// FFAntiBanService - He thong Anti-Ban da tang chuan kien truc Delta Client 1.6.5
+/// FFAntiBanService - He thong Anti-Ban da tang chuan kien truc AimHub VIP Architecture
 /// Nhiem vu:
 /// 1/3: Purge & Lock 17 thu muc telemetry, 11 cache folder va 9 file contentcache hash
 /// 2/3: Dong bo Container Metadata Timestamp voi .com.apple.mobile_container_manager.metadata.plist
@@ -18,7 +18,7 @@ public final class FFAntiBanService: ObservableObject {
     @Published public var lastError: String? = nil
     @Published public var logs: [String] = []
 
-    // MARK: - Telemetry Targets (Boc tach truc tiep tu Mach-O Delta 1.6.5)
+    // MARK: - Telemetry Targets (Boc tach truc tiep tu Mach-O AimHub V2)
     private let telemetryFolders: [String] = [
         "Documents/report",
         "Documents/analytics",
@@ -104,7 +104,7 @@ public final class FFAntiBanService: ObservableObject {
         }
     }
 
-    // MARK: - Main Workflow: 3 Buoc Anti-Ban Chuan Delta 1.6.5
+    // MARK: - Main Workflow: 3 Buoc Anti-Ban Chuan AimHub V2
 
     public func activateAntiBan(
         bundleID: String,
@@ -151,7 +151,7 @@ public final class FFAntiBanService: ObservableObject {
                     self.isActivating = false
                     self.isAntiBanActive = true
                     self.progressValue = 1.0
-                    self.currentStepText = "Anti-Ban LIVE (Delta Isolation Engine)"
+                    self.currentStepText = "Anti-Ban LIVE (AimHub Shield Engine)"
                     UserDefaults.standard.set(true, forKey: "aimhub_antiban_active")
                     self.appendLog("SAN SANG: Phong tuyen Anti-Ban da kich hoat. Nguoi dung co the vao game!")
                     completion(.success(()))
@@ -320,7 +320,7 @@ public final class FFAntiBanService: ObservableObject {
             self.isActivating = true
             self.currentStepText = "Dang don dep..."
             self.logs.removeAll()
-            self.appendLog("=== KHOI DONG ANTIBAN V2 (DELTA ISOLATION) ===")
+            self.appendLog("=== KHOI DONG ANTIBAN V2 (AIMHUB SHIELD) ===")
             self.appendLog("Muc tieu Bundle: \(bundleID)")
         }
 

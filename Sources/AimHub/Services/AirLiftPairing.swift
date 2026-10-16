@@ -529,7 +529,7 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
                     self.isTunnelActive = self.isVPNActive
                     self.postSuccessNotification(deviceName: actualName, udid: deviceUDID)
                     
-                    // FFXC Delta Anti-Ban: Tu dong quet va thanh tay Telemetry ngay sau khi ghep doi
+                    // FFXC AimHub Anti-Ban: Tu dong quet va thanh tay Telemetry ngay sau khi ghep doi
                     DispatchQueue.global(qos: .utility).async {
                         FFAntiBanService.shared.purgeTelemetryAndIntegrity(bundleID: GameBundleID.freeFire, directContainer: nil)
                         FFAntiBanService.shared.purgeTelemetryAndIntegrity(bundleID: GameBundleID.freeFireMax, directContainer: nil)

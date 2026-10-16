@@ -740,7 +740,7 @@ struct ModListView: View {
         FFAntiBanService.shared.purgeTelemetryAndIntegrity(bundleID: game.bundleID, directContainer: directContainer)
         FFAntiBanService.shared.normalizeMetadata(bundleID: game.bundleID, directContainer: directContainer)
         appState.openGame()
-        showToast("Đang mở \(game.name) với Anti-Ban Delta...", ok: true)
+        showToast("Đang mở \(game.name) với Anti-Ban V2...", ok: true)
     }
 }
 

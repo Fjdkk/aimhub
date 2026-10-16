@@ -561,7 +561,7 @@ struct AntiBanLogSheetView: View {
                             Circle()
                                 .fill(antiBanService.isAntiBanActive ? Theme.green : (antiBanService.isActivating ? Theme.orange : Theme.muted))
                                 .frame(width: 8, height: 8)
-                            Text(antiBanService.isAntiBanActive ? "Delta Engine LIVE" : (antiBanService.isActivating ? "Đang xử lý..." : "Sẵn sàng"))
+                            Text(antiBanService.isAntiBanActive ? "AimHub Engine LIVE" : (antiBanService.isActivating ? "Đang xử lý..." : "Sẵn sàng"))
                                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                                 .foregroundColor(Color.white)
                         }
