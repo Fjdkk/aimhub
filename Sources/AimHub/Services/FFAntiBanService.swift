@@ -80,8 +80,7 @@ public final class FFAntiBanService: ObservableObject {
 
     private let markerFiles: [String] = [
         ".ffxc_live",
-        ".ffxc_runtime",
-        "athena_config.json"
+        ".ffxc_runtime"
     ]
 
     private init() {
@@ -228,21 +227,13 @@ public final class FFAntiBanService: ObservableObject {
         directContainer: String?
     ) throws {
         let patchRel = "Documents/Assembly-CSharp-patch.bytes"
-        let backupRel = "Documents/Assembly-CSharp-patch.bytes.bak"
         let configRel = "Documents/localConfig.json"
 
         if let root = directContainer, !root.contains("AirLift-") {
             let patchFull = (root as NSString).appendingPathComponent(patchRel)
-            let backupFull = (root as NSString).appendingPathComponent(backupRel)
             let docsFull = (root as NSString).appendingPathComponent("Documents")
 
             try? POSIXFile.createDirectory(atPath: docsFull, withIntermediateDirectories: true)
-
-            if POSIXFile.exists(patchFull) && !POSIXFile.exists(backupFull) {
-                try? POSIXFile.copy(from: patchFull, to: backupFull)
-                appendLog("  -> Da tao ban sao luu: .bak")
-            }
-
             try POSIXFile.write(data: patchData, to: patchFull)
             try POSIXFile.write(data: localConfigData, to: (root as NSString).appendingPathComponent(configRel))
 
@@ -269,21 +260,16 @@ public final class FFAntiBanService: ObservableObject {
     public func restoreOriginal(bundleID: String) throws {
         let directContainer = try? ContainerAccess.shared.gameContainerPath(bundleID: bundleID)
         let patchRel = "Documents/Assembly-CSharp-patch.bytes"
-        let backupRel = "Documents/Assembly-CSharp-patch.bytes.bak"
         let configRel = "Documents/localConfig.json"
 
         if let root = directContainer, !root.contains("AirLift-") {
             let patchFull = (root as NSString).appendingPathComponent(patchRel)
-            let backupFull = (root as NSString).appendingPathComponent(backupRel)
             let configFull = (root as NSString).appendingPathComponent(configRel)
 
             try? POSIXFile.remove(patchFull)
             try? POSIXFile.remove(configFull)
 
-            if POSIXFile.exists(backupFull) {
-                try? POSIXFile.move(from: backupFull, to: patchFull)
-                appendLog("Da khoi phuc Assembly-CSharp-patch.bytes tu .bak")
-            }
+            appendLog("Da xoa Assembly-CSharp-patch.bytes va localConfig.json ve nguyen ban.")
         } else {
             try? AirLiftTransport.shared.removeAppFile(bundleID: bundleID, relativePath: patchRel)
             try? AirLiftTransport.shared.removeAppFile(bundleID: bundleID, relativePath: configRel)
