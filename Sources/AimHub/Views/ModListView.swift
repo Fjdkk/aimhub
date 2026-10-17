@@ -31,6 +31,8 @@ struct ModListView: View {
     @State private var toastText: String?
     @State private var toastOK = true
     @State private var showPairingPrompt = false
+    @State private var showPreCleanRequiredAlert = false
+    @State private var pendingRuleToEnable: RuleDetail? = nil
 
     var displayedRules: [RuleDetail] {
         guard let tab = selectedTab else { return [] }
@@ -79,6 +81,27 @@ struct ModListView: View {
             Button("Hủy", role: .cancel) {}
         } message: {
             Text("Không thể truy cập thư mục game do giới hạn sandbox. Bạn có muốn chuyển sang tab Cài Đặt > Ghép Đôi để kích hoạt không?")
+        }
+        .alert("Chưa Dọn Dẹp An Toàn!", isPresented: $showPreCleanRequiredAlert) {
+            Button("Dọn dẹp ngay") {
+                guard let rule = pendingRuleToEnable, let game = appState.activeGame else { return }
+                busyModID = rule.ruleID
+                showToast("Đang dọn dẹp hệ thống...", ok: true)
+                FFAntiBanService.shared.runAntiBanV2PreClean(bundleID: game.bundleID) { success in
+                    if success {
+                        showToast("Đã dọn dẹp an toàn! Đang bật mod...", ok: true)
+                        executeEnableMod(rule, game: game)
+                    } else {
+                        showToast("Dọn dẹp thất bại, hãy thử lại!", ok: false)
+                        busyModID = nil
+                    }
+                }
+            }
+            Button("Hủy", role: .cancel) {
+                pendingRuleToEnable = nil
+            }
+        } message: {
+            Text("Bạn chưa kích hoạt dọn dẹp AntiBan V2. Để bảo vệ tài khoản tránh bị hệ thống quét và khóa vĩnh viễn, hãy dọn dẹp sạch sẽ trước khi bật mod!")
         }
     }
 
@@ -612,10 +635,23 @@ struct ModListView: View {
             return
         }
 
+        // BẢO VỆ ANTIBAN: Bắt buộc dọn dẹp trước khi bật mod
+        if !FFAntiBanService.shared.isAntiBanActive {
+            busyModID = nil
+            pendingRuleToEnable = rule
+            showPreCleanRequiredAlert = true
+            return
+        }
+
+        executeEnableMod(rule, game: game)
+    }
+
+    private func executeEnableMod(_ rule: RuleDetail, game: Game) {
+        busyModID = rule.ruleID
         Task { @MainActor in
             defer { busyModID = nil }
             do {
-                // Tự động tắt bất kỳ mod nào cùng nhóm xung đột (vd: đổi giữa Aim Legit, Aim Lock, Aim Scope, Aim Silent)
+                // Tự động tắt bất kỳ mod nào cùng nhóm xung đột
                 let isAimExclusive = (rule.slot == "aim_legit" || rule.slot == "aim_lock" || rule.slot == "aim_on_scope" || rule.slot == "aim_silent")
                 for other in allRules {
                     guard other.ruleID != rule.ruleID, appState.isModActive(ruleID: other.ruleID) else { continue }
