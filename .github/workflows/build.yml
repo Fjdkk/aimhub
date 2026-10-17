@@ -3,6 +3,8 @@ name: Build Unsigned IPA
 on:
   push:
     branches: [ main ]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -81,3 +83,19 @@ jobs:
           name: AimHub Cheat V2.6.5
           path: "AimHub Cheat V2.6.5.ipa"
           retention-days: 7
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: AimHub Cheat V2.6.5.ipa
+          name: AimHub Cheat V2.6.5
+          body: |
+            ### AimHub Cheat V2.6.5 Hoàn Chỉnh
+            - Tích hợp AntiBan V2 Guard Check: Cảnh báo và bắt buộc dọn dẹp an toàn trước khi kích hoạt mod.
+            - Giao diện Status AntiBan V2 độc lập với Terminal Log chi tiết.
+            - Xóa sạch 100% telemetry và các file nhật ký theo dõi của game.
+            - Cấu hình NextDNS Profile 62aaee (RIN STORE VIP SHIELD) với 347 domain chặn toàn diện.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
