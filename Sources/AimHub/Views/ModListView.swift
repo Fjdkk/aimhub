@@ -101,7 +101,7 @@ struct ModListView: View {
                 pendingRuleToEnable = nil
             }
         } message: {
-            Text("Bạn chưa kích hoạt dọn dẹp AntiBan V2. Để bảo vệ tài khoản tránh bị hệ thống quét và khóa vĩnh viễn, hãy dọn dẹp sạch sẽ trước khi bật mod!")
+            Text("Bạn chưa kích hoạt dọn dẹp AntiBan V2. Vui lòng dọn dẹp trước khi Bật Mod.")
         }
     }
 
