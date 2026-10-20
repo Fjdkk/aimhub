@@ -289,7 +289,7 @@ public struct AirLiftSetupView: View {
                 .cornerRadius(10)
             }
             
-            // Nut Nhap File Pairing (Chuan Delta cho iOS 18.7.2 - 18.7.10)
+            // Nut Nhap File Pairing (Dành riêng cho iOS 18.7.2 - 18.7.10)
             VStack(spacing: 6) {
                 Button {
                     showFileImporter = true
