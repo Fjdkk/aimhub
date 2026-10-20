@@ -661,9 +661,59 @@ public final class AirLiftPairingController: NSObject, ObservableObject, NetServ
     
     public func importPairingData(_ data: Data) -> Bool {
         guard !data.isEmpty else { return false }
-        AirLiftPairingStore.shared.savePairingRecord(data)
-        state = .success
-        ContainerAccess.diag("[AirLift] Imported external pairing record successfully (\(data.count) bytes).")
+        
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return false }
+        let recordsDir = docs.appendingPathComponent("PairingRecords")
+        try? fm.createDirectory(at: recordsDir, withIntermediateDirectories: true)
+        
+        var udid = "imported_device"
+        var deviceName = UIDevice.current.name
+        var hostID = "AimHub-Host"
+        var sysBuid = UUID().uuidString
+        var pin = ""
+        var rootCert: Data? = nil
+        var devCert: Data? = nil
+        var hostKey: Data? = nil
+        
+        // Thu doc noi dung PropertyList (dang plist XML hoac bplist)
+        if let plist = (try? PropertyListSerialization.propertyList(from: data, options: [], format: nil)) as? [String: Any] {
+            if let u = plist["UDID"] as? String, !u.isEmpty { udid = u }
+            if let n = plist["DeviceName"] as? String, !n.isEmpty { deviceName = n }
+            if let h = plist["HostIdentifier"] as? String, !h.isEmpty { hostID = h }
+            if let b = plist["SystemBUID"] as? String, !b.isEmpty { sysBuid = b }
+            if let p = plist["PairingPIN"] as? String { pin = p }
+            rootCert = plist["RootCertificate"] as? Data
+            devCert = plist["DeviceCertificate"] as? Data
+            hostKey = plist["HostPrivateKey"] as? Data
+        }
+        
+        let record = AirLiftPairingRecord(
+            udid: udid,
+            deviceName: deviceName,
+            systemBUID: sysBuid,
+            hostID: hostID,
+            pairedAt: Date(),
+            pin: pin,
+            rootCertificate: rootCert,
+            deviceCertificate: devCert,
+            hostPrivateKey: hostKey
+        )
+        
+        AirLiftPairingStore.shared.saveStructuredRecord(record)
+        
+        // Luu luon du lieu goc de stikpair hoac RSD ket noi
+        let directFile = recordsDir.appendingPathComponent("\(udid).mobiledevicepairing")
+        try? data.write(to: directFile)
+        let plistFile = docs.appendingPathComponent("rp_pairing_file.plist")
+        try? data.write(to: plistFile)
+        
+        DispatchQueue.main.async {
+            self.state = .success
+            self.isTunnelActive = self.isVPNActive
+        }
+        
+        ContainerAccess.diag("[AirLift] Imported external pairing record successfully (\(data.count) bytes, UDID: \(udid)).")
         return true
     }
     

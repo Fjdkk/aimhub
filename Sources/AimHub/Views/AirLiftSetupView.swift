@@ -1,11 +1,13 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 public struct AirLiftSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var controller = AirLiftPairingController.shared
     @State private var alertMessage: String?
     @State private var showAlert: Bool = false
+    @State private var showFileImporter: Bool = false
     
     public init() {}
     
@@ -44,6 +46,36 @@ public struct AirLiftSetupView: View {
                     message: Text(alertMessage ?? ""),
                     dismissButton: .default(Text(L10n.t("airlift.close")))
                 )
+            }
+            .fileImporter(
+                isPresented: $showFileImporter,
+                allowedContentTypes: [.item, .data],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    guard let url = urls.first else { return }
+                    let gotAccess = url.startAccessingSecurityScopedResource()
+                    defer {
+                        if gotAccess { url.stopAccessingSecurityScopedResource() }
+                    }
+                    do {
+                        let data = try Data(contentsOf: url)
+                        if controller.importPairingData(data) {
+                            alertMessage = "Nhập file Pairing thành công! Thiết bị đã được ghép đôi và sẵn sàng kết nối AirLift."
+                            showAlert = true
+                        } else {
+                            alertMessage = "Không thể đọc dữ liệu file pairing. Vui lòng đảm bảo file có đuôi .mobiledevicepairing hoặc .plist hợp lệ."
+                            showAlert = true
+                        }
+                    } catch {
+                        alertMessage = "Lỗi khi đọc file: \(error.localizedDescription)"
+                        showAlert = true
+                    }
+                case .failure(let error):
+                    alertMessage = "Không thể chọn file: \(error.localizedDescription)"
+                    showAlert = true
+                }
             }
         }
     }
@@ -255,6 +287,31 @@ public struct AirLiftSetupView: View {
                 .padding(.vertical, 14)
                 .background(Theme.gradient())
                 .cornerRadius(10)
+            }
+            
+            // Nut Nhap File Pairing (Chuan Delta cho iOS 18.7.2 - 18.7.10)
+            VStack(spacing: 6) {
+                Button {
+                    showFileImporter = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.and.arrow.down.fill")
+                        Text("Nhập file Pairing (.plist / .mobiledevicepairing)")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Theme.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Theme.accent.opacity(0.12))
+                    .cornerRadius(10)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.accent.opacity(0.4), lineWidth: 1))
+                }
+                
+                Text("Dành cho iOS 18.7.2 - 18.7.10: Nếu Cài đặt không hiện thiết bị, tạo file trên máy tính (pymobiledevice3 remote pair) rồi bấm nút này để nhập.")
+                    .font(.system(size: 10))
+                    .foregroundColor(Theme.muted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 4)
             }
             
             Button {
